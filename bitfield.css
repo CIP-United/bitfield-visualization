@@ -1,0 +1,46 @@
+body {
+  margin: 8px;
+}
+
+.bitfield-table {
+  background-color: #f8f9fa;
+  color: #202122;
+  margin: 1em 0;
+  border: 1px solid #a2a9b1;
+  border-collapse: collapse;
+  text-align: center;
+  font-family: monospace,monospace;
+  font-size: 1em;
+}
+
+#bitfield-bits > th {
+  min-width: 2ch;
+}
+
+.bitfield-table > tr > th, .bitfield-table > tr > td,
+.bitfield-table > * > tr > th, .bitfield-table > * > tr > td {
+  border: 1px solid #a2a9b1;
+  padding: 0.2em 0.4em;
+}
+
+.bitfield-table > tr > th, .bitfield-table > * > tr > th {
+  background-color: #eaecf0;
+}
+
+#bitfield-bits-value > td:hover {
+  cursor: pointer;
+}
+
+#bitfield-bits-value > td.bitfield-bits-named {
+  background: repeating-linear-gradient(
+    -45deg,
+    #eaecf0,
+    #eaecf0 0.5em,
+    #f8f9fa 0.5em,
+    #f8f9fa 1em
+  );
+}
+
+#bitfield-fields-enum > td {
+  text-align: right;
+}

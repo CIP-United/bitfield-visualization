@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+
+    <title></title>
+
+    <!--external-->
+    <link rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css"
+      integrity="sha512-NhSC1YmyruXifcj/KFRWoC561YpHpc5Jtzgvbuzx5VozKpWvQ+4nXhPdFgmx8xqexRcpAglTj9sIBWINXa8x5w=="
+      crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link href="bitfield.css" rel="stylesheet" />
+    <!--external-->
+    <style></style>
+  </head>
+
+  <body>
+    <div>
+      <div id="bitfield" class="bitfield">
+        <table class="bitfield-table">
+          <tbody>
+            <tr id="bitfield-bits">
+            </tr>
+            <tr id="bitfield-bits-value">
+            </tr>
+            <tr id="bitfield-fields-hex">
+            </tr>
+            <tr id="bitfield-fields">
+            </tr>
+            <tr id="bitfield-fields-enum">
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Value: <code id="bitfield-value-output"></code></p>
+    </div>
+
+    <p>
+      <label for="bitfield-value">Input:</label>
+      <input type="text" id="bitfield-value" name="value" value="0b11101001100"/>
+    </p>
+    <p>
+      <label for="bitfield-value">Default radix:</label>
+      <input type="radio" id="bitfield-2" name="radix" value="2" />
+      <label for="bitfield-2">2</label>
+      <input type="radio" id="bitfield-8" name="radix" value="8" />
+      <label for="bitfield-8">8</label>
+      <input type="radio" id="bitfield-10" name="radix" value="10" />
+      <label for="bitfield-10">10</label>
+      <input type="radio" id="bitfield-16" name="radix" value="16" checked="checked" />
+      <label for="bitfield-16">16</label>
+    </p>
+    <p>
+      <input type="radio" id="bitfield-unsigned" name="signedness" value="unsigned" checked="checked" />
+      <label for="bitfield-unsigned">unsigned</label>
+      <input type="radio" id="bitfield-signed" name="signedness" value="signed" />
+      <label for="bitfield-signed">signed</label>
+    </p>
+
+    <div>
+      <p>
+        <label for="bitfield-format">Format:</label>
+      </p>
+      <textarea id="bitfield-format" name="format" rows="8" cols="80">
+enum Flags {
+  FLAG_ZERO = 0,
+  FLAG_ONE
+  FLAG_THREE = 3,
+  "Long flags" = 4,,,
+}
+#define FLAG_ZERO 12345
+#define FLAG_FOUR 4
+
+field1:8:lime:Flags
+bit1:#14:pink
+field2
+field3:7::FLAG
+field4:1:#44e4e4
+bit2:'23:blue
+      </textarea>
+      <p>
+        <label for="bitfield-struct-select">Select saved struct:</label>
+        <select name="saved" id="bitfield-struct-select" alt="Select saved struct"></select>
+        <button title="Load struct" id="bitfield-struct-load">
+          <span>⤵️</span>
+          <span class="hideable">Load</span>
+        </button>
+        <button title="Delete struct" id="bitfield-struct-delete">
+          <span>❌</span>
+          <span class="hideable">Delete</span>
+        </button>
+      </p>
+      <p>
+        <input type="text" id="bitfield-struct-name" name="struct-name" placeholder="Enter struct name..." />
+        <button title="Save struct" id="bitfield-struct-save">
+          <span>💾</span>
+          <span class="hideable">Save</span>
+        </button>
+      </p>
+      <p>
+        <label for="bitfield-field-select">Select saved field:</label>
+        <select name="saved" id="bitfield-field-select" alt="Select saved field"></select>
+        <button title="Append field" id="bitfield-field-append">
+          <span>⬆️</span>
+          <span class="hideable">Append</span>
+        </button>
+        <button title="Delete field" id="bitfield-field-delete">
+          <span>❌</span>
+          <span class="hideable">Delete</span>
+        </button>
+      </p>
+      <p>
+        <input type="text" id="bitfield-field-desc" name="field-desc" placeholder="Enter field desc to save..." />
+        <button title="Add field" id="bitfield-field-add">
+          <span>➕</span>
+          <span class="hideable">Add</span>
+        </button>
+      </p>
+    </div>
+
+    <!--external-->
+    <script src="bitfield-preload.js"></script>
+    <script src="bitfield.js"></script>
+    <!--external-->
+    <script></script>
+  </body>
+</html>
