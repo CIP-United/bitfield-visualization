@@ -7,15 +7,12 @@ const COLOR_WARNING = 'lightyellow'
 // global
 
 let config = {
-  radix: parseInt(localStorage.getItem('bitfield-radix')),
-  enums: new Map,
-  fields: [],
-  bits: new Map,
-  signed: localStorage.getItem('bitfield-signedness') === 'true',
+  radix: parseInt(localStorage.getItem('bitfield-radix')) || 16,
+  signed: localStorage.getItem('bitfield-signed') === 'true',
+  float: localStorage.getItem('bitfield-float') === 'true',
+  /** @type {Format} */
+  format: undefined,
   value: undefined,
-}
-if (!config.radix) {
-  config.radix = 16
 }
 
 class TwoWayMap extends Map {
@@ -55,248 +52,10 @@ class TwoWayMap extends Map {
   }
 }
 
-function parseValue (str, radix = 10) {
-  if (str.indexOf('.') >= 0) {
-    return NaN
-  }
-
-  let sign = 1
-  if (str[0] === '-') {
-    sign = -1
-    str = str.slice(1)
-  }
-  if (str[0] === '0') {
-    switch (str[1]) {
-      case 'x':
-        radix = 16
-        break
-      case 'b':
-        radix = 2
-        str = str.slice(2)
-        break
-      default:
-        radix = 8
-    }
-  }
-  return sign * parseInt(str, radix)
-}
-
-function toRadix (value, radix = 10) {
-  let sign = Math.sign(value)
-  value = parseInt(Math.abs(value)).toString(radix)
-  switch (radix) {
-    case 2:
-      value = '0b' + value
-      break
-    case 8:
-      value = '0' + value
-      break
-    case 16:
-      value = '0x' + value
-      break
-  }
-  if (sign < 0) {
-    value = '-' + value
-  }
-  return value
-}
-
-function twosComplement (value, width) {
-  let valueBits = (
-    value >= 0 ? value : ((1 << ((-value).toString(2).length + 1)) + value)
-  ).toString(2)
-
-  if (width) {
-    if (valueBits.length > width) {
-      valueBits = valueBits.slice(valueBits.length - width)
-    } else if (valueBits.length < width) {
-      valueBits =
-        Array(width - valueBits.length).fill(value < 0 ? 1 : 0).join('') +
-        valueBits
-    }
-  }
-
-  return valueBits
-}
-
-function splitOnce (str, delim = '\n') {
-  let index = str.indexOf(delim)
-  if (index < 0) {
-    index = str.length
-  }
-  return [str.slice(0, index), str.slice(index + 1)]
-}
-
-const TOKEN_EOF = 0;
-const TOKEN_IDENTIFIER = 1;
-const TOKEN_STRING = 2;
-const TOKEN_CHAR = 3;
-const TOKEN_NUMERIC = 4;
-const TOKEN_OPERATOR = 5;
-
-function nextToken (str) {
-  let oldStr
-  do {
-    oldStr = str
-    str = str.trimLeft()
-    if (str.startsWith('\\')) {
-      str = str.slice(2)
-    }
-    if (str.startsWith('//')) {
-      str = splitOnce(str.slice(2))[1]
-    }
-    if (str.startsWith('/*')) {
-      str = splitOnce(str.slice(2), '*/')[1]
-    }
-  } while (oldStr !== str)
-
-  if (!str) {
-    return ['', str, TOKEN_EOF]
-  }
-
-  if (str[0] === '"' || str[0] === "'") {
-    let indexLiteralEnd = str.indexOf(str[0], 1)
-    return [
-      str.slice(0, indexLiteralEnd + 1), str.slice(indexLiteralEnd + 1),
-      str[0] === '"' ? TOKEN_STRING : TOKEN_CHAR
-    ]
-  }
-
-  const OPERATORS = '+-*/%=<>!~&|^;,.?:()[]{}#'
-  for (let i = 0; i < OPERATORS.length; i++) {
-    if (str[0] === OPERATORS[i]) {
-      return [str[0], str.slice(1), TOKEN_OPERATOR]
-    }
-  }
-
-  let tokenType =
-    '0'.charCodeAt(0) <= str[0].charCodeAt(0) &&
-      str[0].charCodeAt(0) <= '9'.charCodeAt(0) ?
-    TOKEN_NUMERIC : TOKEN_IDENTIFIER;
-  let indexNumberEnd = str.search(/[^a-zA-Z0-9_]/)
-  return indexNumberEnd < 0 ?
-    [str, '', tokenType] :
-    [str.slice(0, indexNumberEnd), str.slice(indexNumberEnd), tokenType]
-}
-
-function wantGrammar (str, grammar) {
-  let result = []
-  let errmsg
-  for (let i = 0; i < grammar.length; i++) {
-    let token, tokenType
-    [token, str, tokenType] = nextToken(str)
-    let wantToken = grammar[i]
-    if (typeof wantToken[0] === 'string' ?
-        wantToken[0] !== token : wantToken[0] !== tokenType) {
-      errmsg = ['want', wantToken[0], ', got', token, 'with type', tokenType]
-      break
-    }
-    if (wantToken[1]) {
-      result.push(token)
-    }
-  }
-  return [result, str, errmsg]
-}
-
-function exhaustRepeatTokens (str, wantToken) {
-  let token, tokenType
-  while (true) {
-    let newStr
-    [token, newStr, tokenType] = nextToken(str)
-    if (token !== wantToken) {
-      break
-    }
-    str = newStr
-  }
-  return str
-}
-
-function parseEnum (str) {
-  const result = new Map
-  let enumType
-  let counter = 0
-  let token, tokenType
-  let newStr
-
-  str = str.trimLeft();
-
-  [token, str, tokenType] = nextToken(str)
-  if (token !== 'enum') {
-    return []
-  }
-
-  [token, str, tokenType] = nextToken(str)
-  if (tokenType === TOKEN_IDENTIFIER) {
-    enumType = token;
-    [token, str, tokenType] = nextToken(str)
-  }
-  if (token !== '{') {
-    return []
-  }
-
-  while (true) {
-    str = exhaustRepeatTokens(str, ',');
-
-    [token, newStr, tokenType] = nextToken(str)
-    if (token === '}') {
-      str = newStr
-      break
-    }
-
-    let key, value
-
-    [key, str, tokenType] = nextToken(str)
-    if (tokenType !== TOKEN_IDENTIFIER && tokenType !== TOKEN_STRING) {
-      return []
-    }
-    result.set(key, counter)
-    counter++
-
-    [token, newStr, tokenType] = nextToken(str)
-    if (tokenType === TOKEN_IDENTIFIER || tokenType === TOKEN_STRING) {
-      continue
-    }
-    str = newStr
-    if (token === '}') {
-      break
-    }
-    if (token === ',') {
-      continue
-    }
-    if (token !== '=') {
-      return []
-    }
-
-    [value, str, tokenType] = nextToken(str)
-    value = parseValue(value)
-    if (tokenType !== TOKEN_NUMERIC || isNaN(value)) {
-      return []
-    }
-    result.set(key, value)
-    counter = value + 1
-  }
-
-  return [result, enumType, str]
-}
-
-function extractField (value, index, width) {
-  return (value >> index) & ((1 << width) - 1)
-}
-
 function escapeHtml (unsafe) {
   return unsafe.replaceAll('&', '&amp;').replaceAll('<', '&lt;')
          .replaceAll('>', '&gt;').replaceAll('"', '&quot;')
          .replaceAll("'", '&#039;')
-}
-
-function initRadixInput (radios, callback, initialValue) {
-  for (let i = 0; i < radios.length; i++) {
-    let radio = radios[i]
-    radio.addEventListener('change', callback)
-    if (radio.value === initialValue) {
-      radio.checked = true
-    }
-  }
 }
 
 
@@ -465,14 +224,12 @@ const localSaved_select = new LocalSaved(
 )
 localSaved_select.bind(
   document.getElementById('bitfield-field-add'), () => {
-    let [width, fields, bits] = parseFormat(input_fieldDesc)
-    if (!fields) {
-      fields = bits
-    }
-    if (!width || !fields[0][0]) {
+    const format = parseFormat(input_fieldDesc)
+    if (!format) {
       return
     }
-    return [fields[0][0], input_fieldDesc.value]
+    return [(format.fields[0] || format.bits.values().next().value).name,
+            input_fieldDesc.value]
   },
   document.getElementById('bitfield-field-append'), value => {
     let format = input_format.value
@@ -488,77 +245,327 @@ localSaved_select.bind(
 
 // value
 
+/**
+ * @param {string} str
+ * @param {number} radix
+ */
+function parseValue (str, radix = 10) {
+  const negative = str[0] === '-'
+  if (negative) {
+    str = str.slice(1)
+  }
+
+  if (str[0] === '0') {
+    if (str.length > 1 && '0' <= str[1] && str[1] <= '9') {
+      str = str.slice(1)
+      str = '0o' + str
+    }
+  } else {
+    switch (radix) {
+      case 2:
+        str = '0b' + str
+        break
+      case 8:
+        str = '0o' + str
+        break
+      case 10:
+        break
+      case 16:
+        str = '0x' + str
+        break
+      default:
+        throw RangeError('radix argument must be 2, 8, 10, 16')
+    }
+  }
+
+  let value
+  try {
+    value = BigInt(str)
+  } catch (e) {
+    return null
+  }
+  if (negative) {
+    value = -value
+  }
+  return value
+}
+
+class Value {
+  /**
+   * @param {(bigint|number|string)} value
+   * @param {number} radix
+   */
+  constructor (value = 0, radix = 10) {
+    switch (typeof value) {
+      case 'bigint':
+      case 'number':
+        this.value = BigInt(value)
+        break
+      case 'string':
+        if (!this.parse(value, radix)) {
+          throw SyntaxError('Cannot convert ' + value + ' to Value')
+        }
+        break
+      default:
+        throw TypeError('value must be a number, bigint or string')
+    }
+  }
+
+  /**
+   * @param {string} str
+   * @param {number} radix
+   */
+  parse (str, radix = 10) {
+    const value = parseValue(str, radix)
+    if (value === null) {
+      return false
+    }
+    this.value = value
+    return true
+  }
+
+  /**
+   * @param {number} radix
+   */
+  toString (radix = 10) {
+    const negative = this.value < 0n
+    let str = (negative ? -this.value : this.value).toString(radix)
+
+    switch (radix) {
+      case 2:
+        str = '0b' + str
+        break
+      case 8:
+        str = '0' + str
+        break
+      case 10:
+        break
+      case 16:
+        str = '0x' + str
+        break
+      default:
+        throw RangeError('toString() radix argument must be 2, 8, 10 or 16')
+    }
+    if (negative) {
+      str = '-' + str
+    }
+
+    return str
+  }
+
+  /**
+   * Toggle a bit by index
+   * @param {number} index
+   */
+  toggle (index) {
+    this.value ^= 1n << BigInt(index)
+  }
+
+  /**
+   * Set a field by index
+   * @param {number} index
+   * @param {number} width
+   * @param {bigint} value
+   */
+  setField (index, width, value) {
+    const bigIndex = BigInt(index)
+    const bigWidth = BigInt(width)
+    // zero field
+    this.value &= ~(((1n << bigWidth) - 1n) << bigIndex)
+    // fill field
+    this.value |= (value & ((1n << bigWidth) - 1n)) << bigIndex
+  }
+
+  /**
+   * Get a field by index
+   * @param {number} index
+   * @param {number} width
+   * @returns {bigint} value
+   */
+  getField (index, width) {
+    const bigIndex = BigInt(index)
+    const bigWidth = BigInt(width)
+    return (this.value >> bigIndex) & ((1n << bigWidth) - 1n)
+  }
+}
+
+class Register extends Value {
+  constructor (width = 1) {
+    super()
+    /** @type {number} */
+    this.width = width
+  }
+
+  get minWidth () {
+    return this.unsigned.toString(2).length
+  }
+
+  get expWidth () {
+    return 1n << BigInt(this.width)
+  }
+
+  get unsigned () {
+    return new Value(this.value & (this.expWidth - 1n))
+  }
+
+  get signed () {
+    const expWidth = 1n << BigInt(this.width)
+    const halfExpWidth = 1n << BigInt(this.width - 1)
+    const value = this.value & (expWidth - 1n)
+    return new Value(value >= halfExpWidth ? value - expWidth : value)
+  }
+
+  /**
+   * @param {number} radix
+   * @param {boolean} signed
+   */
+  toString (radix = 10, signed = false) {
+    return (signed ? this.signed : this.unsigned).toString(radix)
+  }
+
+  /**
+   * Return the raw representation of the register
+   */
+  dump () {
+    return this.unsigned.value.toString(2).padStart(this.width, '0')
+  }
+
+  /**
+   * Test if register can be treated as a float
+   */
+  isFloat () {
+    return this.width === 32 || this.width === 64
+    //return this.width === 16 || this.width === 32 || this.width === 64 || this.width === 96
+  }
+
+  _checkFloat () {
+    if (!this.isFloat()) {
+      throw RangeError('width must be 16, 32, 64 or 96')
+    }
+  }
+
+  /**
+   * @param {string} str
+   */
+  parseFloat (str) {
+    this._checkFloat()
+    const value = parseFloat(str)
+    if (isNaN(value)) {
+      return false
+    }
+
+    const nbyte = this.width / 8
+    const buf = new ArrayBuffer(nbyte)
+    switch (nbyte) {
+      //case 2:
+        //new Uint16Array(buf)[0] = value
+        //break
+      case 4:
+        new Float32Array(buf)[0] = value
+        this.value = BigInt(new Uint32Array(buf)[0])
+        break
+      case 8:
+        new Float64Array(buf)[0] = value
+        this.value = BigInt(new BigUint64Array(buf)[0])
+        break
+      //case 12:
+        //new Uint32Array(buf)[0] = value
+        //break
+    }
+    return true
+  }
+
+  /**
+   * Parse register as a float
+   */
+  toFloat () {
+    this._checkFloat()
+
+    const nbyte = this.width / 8
+    const buf = new ArrayBuffer(nbyte)
+    const value = Number(this.unsigned)
+    switch (nbyte) {
+      //case 2:
+        //new Uint16Array(buf)[0] = value
+        //break
+      case 4:
+        new Uint32Array(buf)[0] = value
+        return new Float32Array(buf)[0]
+      case 8:
+        new BigUint64Array(buf)[0] = value
+        return new Float64Array(buf)[0]
+      //case 12:
+        //new Uint32Array(buf)[0] = value
+        //break
+    }
+  }
+}
+
 const tr_bitsValue = document.getElementById('bitfield-bits-value')
 const tr_fieldsHex = document.getElementById('bitfield-fields-hex')
 const tr_fieldsEnum = document.getElementById('bitfield-fields-enum')
 
 config.value = {
-  value: 0,
-  width: 0,
+  register: new Register,
   inputNotSynced: false,
 
   inputForm: document.getElementById('bitfield-value'),
   _span_value: document.getElementById('bitfield-value-output'),
 
   toSpan: function () {
-    this._span_value.innerText =
-      (config.signed && this.value > 0 && (1 << (this.width - 1)) & this.value ?
-       this.value - (1 << this.width) : this.value) + ' (' + toRadix(
-        this.value >= 0 ? this.value : this.value + (1 << this.width), 16) + ')'
-  },
-
-  read: function () {
-    let value = parseValue(this.inputForm.value, config.radix)
-    if (isNaN(value)) {
-      this.inputForm.style.backgroundColor = COLOR_ERROR
-      this.inputNotSynced = true
-    } else {
-      this.inputForm.style.backgroundColor = ''
-      this.inputNotSynced = false
-      this.value = value
-      this.toSpan()
+    let str = this.register.toString(config.radix, config.signed)
+    if (config.float && this.register.isFloat()) {
+      str += ', ' + this.register.toFloat()
     }
-    return value
+    this._span_value.innerText = str + ' (' + this.register.toString(16) + ')'
   },
 
   toInput: function () {
     if (this.inputNotSynced) {
       return
     }
-    let value = toRadix(this.value, config.radix)
-    this.inputForm.value = value
-    if (this.inputForm.dataset.structName) {
-      this.inputForm.value += ', ' + this.inputForm.dataset.structName
-    }
+    this.inputForm.value = this.register.toString(config.radix)
     localStorage.setItem('bitfield-value', this.inputForm.value)
   },
 
-  set: function (value, initiator) {
-    this.value = value
+  read: function () {
+    if ((config.float && this.register.isFloat() &&
+         this.inputForm.value.includes('.') &&
+         this.register.parseFloat(this.inputForm.value)) ||
+        this.register.parse(this.inputForm.value, config.radix)) {
+      this.inputForm.style.backgroundColor = ''
+      this.inputNotSynced = false
+      this.toSpan()
+      return true
+    }
+    this.inputForm.style.backgroundColor = COLOR_ERROR
+    this.inputNotSynced = true
+    return false
+  },
+
+  changed: function (initiator) {
+    this.toSpan()
     this.toInput()
     this.draw(initiator)
   },
 
   toggle: function (index, initiator) {
-    this.set(this.value ^ (1 << index), initiator)
+    this.register.toggle(index)
+    this.changed(initiator)
   },
 
-  setField: function (value, index, width, initiator) {
-    let newValue = this.value
-    // zero field
-    newValue &= ~(((1 << width) - 1) << index)
-    // fill field
-    newValue |= (value & ((1 << width) - 1)) << index
-    this.set(newValue, initiator)
+  setField: function (index, width, value, initiator) {
+    this.register.setField(index, width, value)
+    this.changed(initiator)
   },
 
   draw: function (initiator) {
-    if (!this.width) {
-      return
+    if (this.register.width === 0) {
+      return false
     }
-    let value = initiator ? this.value : this.read()
-    if (isNaN(value)) {
-      return
+    // if no initiator, try to read input
+    if (!initiator && !this.read()) {
+      return false
     }
 
     const tds_fieldHex = tr_fieldsHex.children
@@ -570,8 +577,8 @@ config.value = {
         div_fieldHex.style.backgroundColor = ''
         const fieldDataset = td_fieldHex.dataset
         div_fieldHex.innerText =
-          (fieldDataset.width > 1 ? '0x' : '') + extractField(
-            value, fieldDataset.index, fieldDataset.width).toString(16)
+          (fieldDataset.width > 1 ? '0x' : '') + this.register.getField(
+            fieldDataset.index, fieldDataset.width).toString(16)
       }
 
       const td_fieldEnum = tds_fieldEnum[i]
@@ -579,8 +586,8 @@ config.value = {
         const select_fieldEnum = td_fieldEnum.children[0]
         if (select_fieldEnum && select_fieldEnum !== initiator) {
           const fieldDataset = td_fieldEnum.dataset
-          const fieldValue = extractField(
-            value, fieldDataset.index, fieldDataset.width)
+          const fieldValue = this.register.getField(
+            fieldDataset.index, fieldDataset.width)
           select_fieldEnum.value = fieldValue
           if (select_fieldEnum.value === fieldValue) {
             select_fieldEnum.value = ''
@@ -590,41 +597,43 @@ config.value = {
     }
 
     const tds_bitsValue = tr_bitsValue.children
-    let valueBits = twosComplement(value, this.width)
+    const valueBits = this.register.dump()
     for (let i = 0; i < tds_bitsValue.length; i++) {
       tds_bitsValue[i].innerText = valueBits[i]
     }
+
+    return true
   }
 }
 
 config.value.inputForm.addEventListener('input', function (event) {
-  let [value, structName] = event.target.value.split(',').map(x => x.trim())
-  if (!value) {
+  if (!event.target.value.trim()) {
     event.target.style.backgroundColor = COLOR_WARNING
     config.value.inputNotSynced = true
     return
   }
-  event.target.dataset.structName = structName || ''
   localStorage.setItem('bitfield-value', event.target.value)
-  if (structName) {
-    localSaved_struct.execute(structName)
-  }
   config.value.draw()
 })
-const oldValue = localStorage.getItem('bitfield-value')
-if (oldValue) {
-  config.value.inputForm.value = oldValue
-  config.value.draw()
-}
+// load value after format drawing
 
 tr_bitsValue.addEventListener('click', function (event) {
   if (event.target.dataset.index) {
-    config.value.toggle(event.target.dataset.index)
+    config.value.toggle(event.target.dataset.index, event.target)
   }
 })
 
-
 // radix & signedness
+function initRadixInput (radios, callback, initialValue) {
+  for (let i = 0; i < radios.length; i++) {
+    let radio = radios[i]
+    radio.addEventListener('change', callback)
+    if (radio.value === initialValue) {
+      radio.checked = true
+    }
+  }
+}
+
 initRadixInput(
   document.querySelectorAll('input[type=radio][name="radix"]'),
   function (event) {
@@ -634,18 +643,333 @@ initRadixInput(
       config.value.draw()  // try re-parse
     } else {
       config.value.toInput()
+      config.value.toSpan()
     }
   }, config.radix)
-initRadixInput(
-  document.querySelectorAll('input[type=radio][name="signedness"]'),
-  function (event) {
-    config.signed = event.target.value === 'signed'
-    localStorage.setItem('bitfield-signedness', config.signed)
-    config.value.toSpan()
-  }, config.signed ? 'signed' : 'unsigned')
+
+const input_signed = document.getElementById('bitfield-signed')
+input_signed.checked = config.signed
+input_signed.addEventListener('change', function (event) {
+  config.signed = event.target.checked
+  localStorage.setItem('bitfield-signed', config.signed)
+  config.value.toSpan()
+})
+
+const input_float = document.getElementById('bitfield-float')
+input_float.checked = config.float
+input_float.addEventListener('change', function (event) {
+  config.float = event.target.checked
+  localStorage.setItem('bitfield-float', config.float)
+  config.value.toSpan()
+})
 
 
 // format
+
+class Token {
+  static EOF = 0
+  static IDENTIFIER = 1
+  static STRING = 2
+  static CHAR = 3
+  static NUMERIC = 4
+  static OPERATOR = 5
+
+  /**
+   * @param {number} type
+   * @param {string?} str
+   * @param {number?} index
+   */
+  constructor (type, str, index) {
+    this.type = type
+    this.str = str
+    this.index = index
+  }
+
+  /**
+   * Test if token is of a given type
+   * @param {(number|string)} want
+   * @returns {boolean}
+   */
+  match (want) {
+    return typeof want === 'string' ? want === this.str : want === this.type
+  }
+}
+
+class CLexer {
+  /**
+   * @param {string} str
+   */
+  constructor (str) {
+    /** @type {string} */
+    this.buffer = str.replaceAll('\\\n', ' ').trimEnd()
+    /** @type {number} */
+    this.i = 0
+  }
+
+  get isEOF () {
+    if (this.i >= this.buffer.length) {
+      this.i = -1
+      return true
+    }
+    return this.i < 0
+  }
+
+  /**
+   * @param {number} start
+   * @param {number} end
+   * @returns {string}
+   */
+  slice (start, end) {
+    return this.buffer.slice(start, end)
+  }
+
+  /**
+   * Return next token
+   * @param {boolean} [prefetch = false] - Do not increase buffer pointer
+   * @returns {Token}
+   */
+  next (prefetch = false) {
+    if (this.i < 0) {
+      return new Token(Token.EOF)
+    }
+
+    // skip comments and whitespace
+    let oldI
+    do {
+      oldI = this.i
+      while (' \t\r\n'.includes(this.buffer[this.i])) {
+        this.i++
+      }
+      if (this.buffer.startsWith('\\', this.i)) {
+        this.i += 2
+      }
+      if (this.buffer.startsWith('//', this.i)) {
+        this.i = this.buffer.indexOf('\n', this.i + 2)
+        if (this.i < 0) {
+          return new Token(Token.EOF)
+        }
+        this.i++
+      }
+      if (this.buffer.startsWith('/*', this.i)) {
+        this.i = this.buffer.indexOf('*/', this.i + 2)
+        if (this.i < 0) {
+          return new Token(Token.EOF)
+        }
+        this.i += 2
+      }
+    } while (oldI !== this.i)
+
+    if (this.i >= this.buffer.length) {
+      this.i = -1
+      return new Token(Token.EOF)
+    }
+
+    const token = new Token(null, null, this.i)
+    const thisChar = this.buffer[this.i]
+    if (thisChar === '"' || thisChar === "'") {
+      let indexLiteralEnd = this.buffer.indexOf(thisChar, this.i + 1)
+      if (indexLiteralEnd >= 0) {
+        indexLiteralEnd++
+      }
+      token.type = thisChar === '"' ? Token.STRING : Token.CHAR
+      token.str = this.buffer.slice(this.i, indexLiteralEnd)
+      this.i = indexLiteralEnd
+    } else if ('+-*/%=<>!~&|^;,.?:()[]{}#'.includes(thisChar)) {
+      token.type = Token.OPERATOR
+      token.str = thisChar
+      this.i++
+    } else {
+      let indexTokenEnd = this.i + 1
+      let testChar = this.buffer[indexTokenEnd]
+      while (('0' <= testChar && testChar <= '9') ||
+             ('a' <= testChar && testChar <= 'z') ||
+             ('A' <= testChar && testChar <= 'Z') || testChar === '_') {
+        indexTokenEnd++
+        testChar = this.buffer[indexTokenEnd]
+      }
+      token.type =
+        '0' <= thisChar && thisChar <= '9' ? Token.NUMERIC : Token.IDENTIFIER
+      token.str = this.buffer.slice(this.i, indexTokenEnd)
+      this.i = indexTokenEnd
+    }
+
+    if (prefetch) {
+      this.i = oldI
+    }
+    return token
+  }
+
+  /**
+   * Skip after the first delimiter
+   * @param {string} [delim = '\n']
+   * @returns {number} New buffer pointer
+   */
+  split (delim = '\n') {
+    this.i = this.buffer.indexOf(delim, this.i)
+    if (this.i < 0) {
+      return -1
+    }
+    const res = this.i
+    this.i += delim.length
+    return res
+  }
+
+  /**
+   * Consume repeated tokens
+   * @param {(number|string)} want
+   * @returns {boolean} Whether EOF was reached
+   */
+  exhaust (want) {
+    const isString = typeof want === 'string'
+    let token
+    do {
+      token = this.next()
+      if (token.type === Token.EOF) {
+        return true
+      }
+    } while (isString ? token.str === want : token.type === want)
+    this.i = token.index
+    return false
+  }
+
+  _want (grammar, ignoreError = false, isString = false) {
+    const oldI = this.i
+    const token = this.next()
+    if (isString ? grammar !== token.str : grammar !== token.type) {
+      if (!ignoreError) {
+        this.i = oldI
+      }
+      return null
+    }
+    return token
+  }
+
+  /**
+   * Test if next token is of given type
+   * @param {number} type
+   * @param {boolean} ignoreError Consume buffer regardless of error
+   * @returns {Token?} Matching token or null if not found
+   */
+  wantType (type, ignoreError = false) {
+    return this._want(type, ignoreError, false)
+  }
+
+  /**
+   * Test if next token is of given string
+   * @param {string} str
+   * @param {boolean} ignoreError Consume buffer regardless of error
+   * @returns {Token?} Matching token or null if not found
+   */
+  wantStr (str, ignoreError = false) {
+    return this._want(str, ignoreError, true)
+  }
+
+  want (grammar, ignoreError = false) {
+    const oldI = this.i
+    const token = this.next()
+    if (!token.match(grammar)) {
+      if (!ignoreError) {
+        this.i = oldI
+      }
+      return null
+    }
+    return token
+  }
+
+  /**
+   * Match buffer against given grammars
+   * @param {(number|string)[]} grammars
+   * @param {boolean} ignoreError Consume buffer regardless of error
+   * @returns {Token[]}
+   */
+  match (grammars, ignoreError = false) {
+    const oldI = this.i
+    /** @type {string[]} */
+    const result = []
+    for (let i = 0; i < grammars.length; i++) {
+      const token = this.next()
+      if (!token.match(grammars[i])) {
+        if (!ignoreError) {
+          this.i = oldI
+        }
+        break
+      }
+      result.push(token.str)
+    }
+    return result
+  }
+}
+
+/**
+ * @typedef EnumMap
+ * @type {Map<string, bigint>}
+ * @property {string} [0] - enum name
+ * @property {bigint} [1] - enum value
+ */
+
+/**
+ * Parse C-like enum definition
+ * @param {CLexer} lexer
+ * @returns {EnumMap?}
+ */
+ function parseEnum (lexer) {
+  if (!lexer.wantStr('enum')) {
+    return null
+  }
+
+  /** @type {EnumMap} */
+  const result = new Map
+  /** @type {Token} */
+  let token = lexer.next()
+  if (token.type === Token.IDENTIFIER) {
+    result.name = token.str
+    token = lexer.next()
+  }
+  if (token.str !== '{') {
+    return null
+  }
+
+  let counter = 0n
+  while (!lexer.exhaust(',')) {
+    token = lexer.next()
+    if (token.str === '}') {
+      break
+    }
+
+    if (token.type !== Token.IDENTIFIER && token.type !== Token.STRING) {
+      return null
+    }
+    const key = token.str
+    result.set(key, counter)
+    counter += 1n
+
+    token = lexer.next()
+    if (token.type === Token.IDENTIFIER || token.type === Token.STRING ||
+        token.str === ',') {
+      lexer.i = token.index
+      continue
+    }
+    if (token.str === '}') {
+      break
+    }
+    if (token.str !== '=') {
+      return null
+    }
+
+    token = lexer.next()
+    if (token.type !== Token.NUMERIC) {
+      return null
+    }
+    const value = parseValue(token.str)
+    if (value === null) {
+      return null
+    }
+    result.set(key, value)
+    counter = value + 1n
+  }
+
+  return result
+}
 
 class Field {
   constructor (name, width, index, color, enumTypes) {
@@ -662,15 +986,17 @@ class Field {
     let [name, width, color, enumTypes] = str.split(':').map(x => x.trim())
 
     if (!width) {
+      // treat as 1-bit field
       width = 1
-    } else if ('0'.charCodeAt(0) > width.charCodeAt(0) ||
-               width.charCodeAt(0) > '9'.charCodeAt(0) ) {
+    } else if ('0' > width[0] || width[0] > '9') {
+      // bit indicator
       index = parseInt(width.slice(1))
       if (isNaN(index)) {
         return
       }
       width = 0
     } else {
+      // field
       width = parseInt(width)
       if (isNaN(width)) {
         return
@@ -737,164 +1063,178 @@ class Field {
   }
 }
 
-function parseFormat (element) {
-  let format = element.value.replaceAll('\\\n','').trim()
-  if (!format) {
-    element.style.backgroundColor = ''
-    return []
+class Format {
+  /**
+   * @param {Field[]?} fields
+   * @param {Map<number, Field>?} bits
+   * @param {Map<string, EnumMap>?} enums
+   */
+  constructor (fields, bits, enums) {
+    /** @type {Field[]} */
+    this.fields = fields || []
+    /** @type {Map<number, Field>} */
+    this.bits = bits || new Map
+    /** @type {Map<string, EnumMap>} */
+    this.enums = enums || new Map
+    /** @type {number} */
+    this.width = 0
   }
 
-  let width = 0
-  let width_bits = 0
-  const fields = []
-  const bits = new Map
-  const enums = new Map
+  isEmpty () {
+    return this.fields.length === 0 && this.bits.size === 0
+  }
+
+  postfix () {
+    this.width = 0
+    for (let i = 0; i < this.fields.length; i++) {
+      this.width += this.fields[i].width
+    }
+    let newWidth = this.width
+    this.bits.forEach((_, index) => {
+      if (index + 1 > newWidth) {
+        newWidth = index + 1
+      }
+    })
+    if (newWidth > this.width) {
+      this.fields.unshift(new Field('', newWidth - this.width, this.width))
+      this.width = newWidth
+    }
+
+    let currentIndex = this.width
+    for (let i = 0; i < this.fields.length; i++) {
+      this.fields[i].collectEnums(this.enums)
+      currentIndex -= this.fields[i].width
+      this.fields[i].index = currentIndex
+    }
+  }
+}
+
+/**
+ * @param {Element} element
+ */
+function parseFormat (element) {
+  const lexer = new CLexer(element.value)
+  if (!lexer.buffer) {
+    element.style.backgroundColor = ''
+    return null
+  }
+
+  const format = new Format
+  /** @type {EnumMap} */
   const anomEnum = new Map
-  enums.set(null, anomEnum)
+  format.enums.set(null, anomEnum)
 
   let parseError = false
+
+  // main loop parse enums
   while (true) {
-    if (!format) {
+    const token = lexer.next()
+    if (token.type === Token.EOF) {
       break
-    }
-    format = format.trimLeft()
-    if (!format) {
-      break
-    }
-
-    let token, tokenType, errmsg
-    let line
-
-    if (format[0] === '#') {
-      let key, value
-      [[key, value], format, errmsg] = wantGrammar(format, [
-        ['#'], ['define'], [TOKEN_IDENTIFIER, true], [TOKEN_NUMERIC, true]
-      ])
-      if (errmsg) {
+    } else if (token.str === '#') {
+      // single-line define
+      let [_, key, value] = lexer.match([
+        'define', Token.IDENTIFIER, Token.NUMERIC])
+      if (!value) {
         parseError = true
         break
       }
       value = parseValue(value)
-      if (isNaN(value)) {
+      if (value === null) {
         parseError = true
         break
       }
       anomEnum.set(key, value)
-      [line, format] = splitOnce(format)
-      continue
-    }
-
-    if (format.startsWith('typedef')) {
-      let enumObj, enumType
-      let namedEnum
-      [enumObj, enumType, format] = parseEnum(format.slice('typedef'.length))
-      if (!enumObj) {
+      // skip that line
+      lexer.split()
+    } else if (token.str === 'typedef') {
+      // enum with typedef
+      const enumMap = parseEnum(lexer)
+      if (!enumMap) {
         parseError = true
         break
       }
-      if (enumType) {
-        namedEnum = true
-        enums.set(enumType, enumObj)
-      }
 
-      let nextFormat
-      [enumType, nextFormat, tokenType] = nextToken(format)
-      if (tokenType === TOKEN_IDENTIFIER) {
-        namedEnum = true
-        enums.set(enumType, enumObj)
-        format = nextFormat
-      }
-
-      if (!namedEnum) {
-        enumObj.forEach((value, key) => anomEnum.set(key, value))
-      }
-
-      format = exhaustRepeatTokens(format, ';')
-      continue
-    }
-
-    if (format.startsWith('enum')) {
-      let enumObj, enumType
-      let namedEnum
-      [enumObj, enumType, format] = parseEnum(format)
-      if (!enumObj) {
-        parseError = true
-        break
-      }
-      if (enumType) {
-        enums.set(enumType, enumObj)
+      token = lexer.wantType(Token.IDENTIFIER)
+      if (token) {
+        format.enums.set(token.str, enumMap)
+      } else if (enumMap.name) {
+        format.enums.set(enumMap.name, enumMap)
       } else {
-        enumObj.forEach((value, key) => anomEnum.set(key, value))
+        enumMap.forEach((value, key) => anomEnum.set(key, value))
       }
 
-      format = exhaustRepeatTokens(format, ';')
-      continue
-    }
-
-    [line, format] = splitOnce(format)
-    const field = Field.fromString(line)
-    if (!field) {
-      parseError = true
-      break
-    }
-    if (!field.width) {
-      if (field.index > width_bits) {
-        width_bits = field.index
+      lexer.exhaust(';')
+    } else if (token.str === 'enum') {
+      // enum without typedef
+      lexer.i = token.index
+      const enumMap = parseEnum(lexer)
+      if (!enumMap) {
+        parseError = true
+        break
       }
-      bits.set(field.index, field)
+      if (enumMap.name) {
+        format.enums.set(enumMap.name, enumMap)
+      } else {
+        enumMap.forEach((value, key) => anomEnum.set(key, value))
+      }
+
+      lexer.exhaust(';')
     } else {
-      width += field.width
-      fields.push(field)
+      // field
+      const field = Field.fromString(lexer.slice(token.index, lexer.split()))
+      if (!field) {
+        parseError = true
+        break
+      }
+      if (field.width === 0) {
+        format.bits.set(field.index, field)
+      } else {
+        format.fields.push(field)
+      }
     }
   }
+
   if (parseError) {
     element.style.backgroundColor = COLOR_ERROR
-    return []
+    return null
   }
-  if (fields.length === 0) {
+  if (format.isEmpty()) {
     element.style.backgroundColor = COLOR_WARNING
-    return []
+    return null
   }
   element.style.backgroundColor = ''
-
-  width_bits++
-  if (width_bits > width) {
-    fields.unshift(new Field('', width_bits - width, width))
-    width = width_bits
-  }
-
-  let currentIndex = width
-  for (let i = 0; i < fields.length; i++) {
-    fields[i].collectEnums(enums)
-    currentIndex -= fields[i].width
-    fields[i].index = currentIndex
-  }
-
-  return [width, fields, bits, enums]
+  format.postfix()
+  return format
 }
 
 const input_format = document.getElementById('bitfield-format')
 const tr_bits = document.getElementById('bitfield-bits')
 const tr_fields = document.getElementById('bitfield-fields')
+const label_float = document.querySelector('label[for="bitfield-float"]')
 
 function drawFormat () {
-  [config.value.width, config.fields, config.bits, config.enums] =
-    parseFormat(input_format)
-  if (!config.value.width) {
+  const format = parseFormat(input_format)
+  if (!format) {
     return
   }
+  config.format = format
+  config.value.register.width = format.width
   localStorage.setItem('bitfield-format', input_format.value)
+
+  label_float.style.backgroundColor =
+    config.value.register.isFloat() ? '' : COLOR_WARNING
 
   let tr_bitsValue_html = ''
   let tr_bits_html = ''
-  for (let i = 0; i < config.value.width; i++) {
+  for (let i = 0; i < config.format.width; i++) {
     // bits header
-    tr_bits_html += '<th>' + (config.value.width - i - 1) + '</th>\n'
+    let index = config.format.width - i - 1
+    tr_bits_html += '<th>' + index + '</th>\n'
 
     // data, bits
-    let index = config.value.width - i - 1
     tr_bitsValue_html += '<td '
-    let field = config.bits.get(index)
+    let field = config.format.bits.get(index)
     if (field) {
       tr_bitsValue_html +=
         'class="bitfield-bits-named" style="background:' +
@@ -908,8 +1248,8 @@ function drawFormat () {
   let tr_fieldsHex_html = ''
   let tr_fields_html = ''
   let fieldsHaveEnums = false
-  for (let i = 0; i < config.fields.length; i++) {
-    let field = config.fields[i]
+  for (let i = 0; i < config.format.fields.length; i++) {
+    let field = config.format.fields[i]
 
     // data, fields
     tr_fieldsHex_html +=
@@ -934,7 +1274,7 @@ function drawFormat () {
     tr_fieldsHex.querySelectorAll('div[contenteditable]'),
     element => element.addEventListener('input', event => {
       let fieldValue = parseValue(event.target.innerText, config.radix)
-      if (isNaN(fieldValue)) {
+      if (fieldValue === null) {
         event.target.style.backgroundColor = COLOR_ERROR
         return
       }
@@ -942,16 +1282,16 @@ function drawFormat () {
 
       const fieldDataset = event.target.parentElement.dataset
       if (fieldDataset.width > 0) {
-        config.value.setField(fieldValue, fieldDataset.index,
-                              fieldDataset.width, event.target)
+        config.value.setField(fieldDataset.index, fieldDataset.width,
+                              fieldValue, event.target)
       }
     }))
 
   // data, enums
   let tr_fieldsEnum_html = ''
   if (fieldsHaveEnums) {
-    for (let i = 0; i < config.fields.length; i++) {
-      let field = config.fields[i]
+    for (let i = 0; i < config.format.fields.length; i++) {
+      let field = config.format.fields[i]
       tr_fieldsEnum_html +=
         '<td colspan="' + field.width + '" data-index="' + field.index +
         '" data-width="' + field.width + '">'
@@ -978,8 +1318,10 @@ function drawFormat () {
           return
         }
 
-        let value = parseInt(event.target.value)
-        if (isNaN(value)) {
+        let value
+        try {
+          value = BigInt(event.target.value)
+        } catch (e) {
           console.error(event.target,
                         'has option that do not has a valid value')
           return
@@ -987,8 +1329,8 @@ function drawFormat () {
 
         let fieldDataset = event.target.parentElement.dataset
         if (fieldDataset.width > 0) {
-          config.value.setField(value, fieldDataset.index,
-                                fieldDataset.width, event.target)
+          config.value.setField(fieldDataset.index, fieldDataset.width,
+                                value, event.target)
         }
       }))
   }
@@ -1004,3 +1346,11 @@ if (oldFormat) {
   input_format.value = oldFormat
 }
 drawFormat()
+
+config.value.inputForm.value = 0
+config.value.draw()
+const oldValue = localStorage.getItem('bitfield-value')
+if (oldValue) {
+  config.value.inputForm.value = oldValue
+  config.value.draw()
+}

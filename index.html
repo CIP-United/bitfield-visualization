@@ -63,10 +63,16 @@
       <label for="bitfield-16">16</label>
     </p>
     <p>
-      <input type="radio" id="bitfield-unsigned" name="signedness" value="unsigned" checked="checked" />
-      <label for="bitfield-unsigned">unsigned</label>
-      <input type="radio" id="bitfield-signed" name="signedness" value="signed" />
-      <label for="bitfield-signed">signed</label>
+      <input type="checkbox" id="bitfield-signed" name="conversions" value="signed" />
+      <label for="bitfield-signed">Signed int</label>
+      <span class="tooltip">?
+        <span class="tooltiptext">Uncheck to always show unsigned int</span>
+      </span>
+      <input type="checkbox" id="bitfield-float" name="conversions" value="float" />
+      <label for="bitfield-float">IEEE float</label>
+      <span class="tooltip">?
+        <span class="tooltiptext">Treat value as IEEE float, must be exactly 16, 32, 64 or 96 bits long</span>
+      </span>
     </p>
 
     <div>
@@ -88,8 +94,7 @@ bit1:#14:pink
 field2
 field3:7::FLAG
 field4:1:#44e4e4
-bit2:'23:blue
-      </textarea>
+bit2:'23:blue</textarea>
       <p>
         <label for="bitfield-struct-select">Select saved struct:</label>
         <select name="saved" id="bitfield-struct-select" alt="Select saved struct"></select>
