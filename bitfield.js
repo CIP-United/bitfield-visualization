@@ -7,49 +7,15 @@ const COLOR_WARNING = 'lightyellow'
 // global
 
 let config = {
+  /** default base to parse the input as */
   radix: parseInt(localStorage.getItem('bitfield-radix')) || 16,
+  /** whether to treat value as signed data */
   signed: localStorage.getItem('bitfield-signed') === 'true',
+  /** whether to interpret value as an IEEE754 float */
   float: localStorage.getItem('bitfield-float') === 'true',
   /** @type {Format} */
   format: undefined,
   value: undefined,
-}
-
-class TwoWayMap extends Map {
-  constructor (iterable) {
-    super(iterable)
-    this.reverseMap = new Map
-    this.forEach((value, key) => {
-      if (this.reverseMap.has(value)) {
-        this.delete(key)
-      } else {
-        this.reverseMap.set(value, key)
-      }
-    })
-  }
-
-  reverseGet (key) {
-    return this.reverseMap.get(key)
-  }
-
-  set (key, value) {
-    if (this.reverseMap.has(value)) {
-      this.delete(this.reverseMap.get(value))
-    }
-    this.reverseMap.delete(super.get(key))
-    this.reverseMap.set(value, key)
-    return super.set(key, value)
-  }
-
-  delete (key) {
-    this.reverseMap.delete(this.get(key))
-    return super.delete(key)
-  }
-
-  clear () {
-    this.reverseMap.clear()
-    return super.clear()
-  }
 }
 
 function escapeHtml (unsafe) {
@@ -58,25 +24,87 @@ function escapeHtml (unsafe) {
          .replaceAll("'", '&#039;')
 }
 
+/**
+ * Convert a string to an integer, treat remaining characters as an error.
+ * @param {string} string - A string to convert into a number.
+ * @param {number} [radix=10]
+ *  A value between 2 and 36 that specifies the base of the number in `string`.
+ *  If this argument is not supplied, strings with a prefix of '0x' are
+ *  considered hexadecimal. All other strings are considered decimal.
+ * @returns {number} Parsed integer, or NaN if error.
+ */
+ function filterInt(value) {
+  return /^[-+]?(\d+|Infinity)$/.test(value) ? Number(value) : NaN
+}
+
 
 // saved
 
+/**
+ * Manage select element using `LocalStorage`.
+ * @typeparam {T} the type parameter
+ * @typeparam {V} the return type of `executor`
+ */
 class LocalSaved {
+  /**
+   * @param {Element} select - The `<select>` element.
+   * @param {string} name - The key to `LocalStorage`.
+   * @param {[string, T][]?} preload
+   *  Preloaded data. If set, reading/writing to `LocalStorage` will be
+   *  disabled.
+   */
   constructor (select, name, preload) {
+    /**
+     * the `<select>` element
+     * @type {Element}
+     */
     this.select = select
+    /**
+     * the key to `LocalStorage`
+     * @type {string}
+     */
     this.name = name
+    /**
+     * `true` if preloaded data is being used
+     * @type {boolean}
+     */
     this.readonly = preload !== undefined
     if (this.readonly) {
+      /**
+       * data for the select element
+       * @type {[string, T][]}
+       */
       this.data = preload
     } else {
       this.load()
     }
     this.prepare()
 
+    /**
+     * function for a new k/v pair when add button is clicked
+     * @type {function(Event):[string, T]}
+     * @default null
+     */
     this.factory = null
+    /**
+     * action when select button is clicked
+     * @type {function(T, string, LocalSaved):V}
+     * @default null
+     */
     this.executor = null
   }
 
+  /**
+   * Bind the add, select, and delete buttons, and `factory` and `executor`.
+   * @param {Element} btnAdd - The add button. Will be disabled if `readonly`.
+   * @param {function(Event):[string, T]} factory
+   *  The function for a new k/v pair.
+   * @param {Element} btnSelect - The select button.
+   * @param {function(T, string, LocalSaved):V} executor
+   *  The action when select button is clicked.
+   * @param {Element} btnDelete
+   *  The delete button. Will be disabled if `readonly`.
+   */
   bind (btnAdd, factory, btnSelect, executor, btnDel) {
     this.executor = executor
     btnSelect.addEventListener('click', event => this.execute())
@@ -100,23 +128,32 @@ class LocalSaved {
     }
   }
 
+  /**
+   * Call `executor` with the specified key and its value.
+   * @param {string} key - The key.
+   * @returns {V} The return value of `executor`, or `undefined` if
+   *  `executor` is not set or `key` is not found.
+   */
   execute (key) {
     if (!this.executor) {
-      return
+      return undefined
     }
     if (key) {
       this.selected = key
       if (this.selected !== key) {
-        return
+        return undefined
       }
     }
     let value = this.get(this.selected)
     if (value === undefined) {
       console.warn('LocalSaved: key not found: ', this.selected)
     }
-    this.executor(value, this.selected, this)
+    return this.executor(value, this.selected, this)
   }
 
+  /**
+   * Load data from `LocalStorage`.
+   */
   load () {
     this.data = JSON.parse(localStorage.getItem(this.name))
     if (!this.data) {
@@ -124,17 +161,28 @@ class LocalSaved {
     }
   }
 
+  /**
+   * Save data to `LocalStorage`.
+   */
   save () {
     if (!this.readonly) {
       localStorage.setItem(this.name, JSON.stringify(this.data))
     }
   }
 
+  /**
+   * Generate `<option>` to the key.
+   * @param {string} key - The key.
+   * @returns {string} The `<option>` element.
+   */
   static toOption (key) {
     return '<option value="' + escapeHtml(key) + '">' + escapeHtml(key) +
            '</option>\n'
   }
 
+  /**
+   * Update the `<option>`s of `<select>` accroding to `data`.
+   */
   prepare () {
     if (this.data) {
       this.select.innerHTML = this.data.reduce((accumulator, currentValue) =>
@@ -142,18 +190,38 @@ class LocalSaved {
     }
   }
 
+  /**
+   * Return the selected key from `<select>`.
+   * @type {string}
+   */
   get selected () {
     return this.select.value
   }
 
+  /**
+   * Set the selected key of `<select>`. Does not check whether the key exists.
+   * @param {string} key - The key to be selected.
+   */
   set selected (value) {
     this.select.value = value
   }
 
+  /**
+   * Find the index of the key in `data`.
+   * @param {string} key - The key to be found.
+   * @returns {number} The index of the `key` in `data`, `-1` if not found.
+   */
   findIndex (key) {
     return this.data.findIndex(x => x[0] === key)
   }
 
+  /**
+   * Save the key/value pair to `LocalStorage` and update the `<select>`
+   * element.
+   * @param {string} key - The key to be set.
+   * @param {T} value - The value to be set.
+   * @returns {boolean} `true` if the `key`/`value` is added/updated.
+   */
   set (key, value) {
     let savedIndex = this.findIndex(key)
     if (savedIndex >= 0) {
@@ -170,18 +238,28 @@ class LocalSaved {
     return true
   }
 
+  /**
+   * Get the value of the key from `data`.
+   * @param {string} key - The key to be found.
+   * @returns {T?} The value of the `key`, `undefined` if not found.
+   */
   get (key) {
     let savedIndex = this.findIndex(key)
     if (savedIndex < 0) {
-      return
+      return undefined
     }
     return this.data[savedIndex][1]
   }
 
+  /**
+   * Remove the key/value pair from `LocalStorage` and update the `<select>`.
+   * @param {string} key - The key to be removed.
+   * @returns {T?} The value of the `key`, `undefined` if not found.
+   */
   pop (key) {
     let savedIndex = this.findIndex(key)
     if (savedIndex < 0) {
-      return
+      return undefined
     }
     let result = this.data[savedIndex][1]
     this.data.splice(savedIndex, 1)[0]
@@ -246,8 +324,11 @@ localSaved_select.bind(
 // value
 
 /**
- * @param {string} str
- * @param {number} radix
+ * Convert a string to a bigint, based on its prefix.
+ * @param {string} str - The string to be parsed.
+ * @param {number} [radix=10]
+ *  The default base to parse the string as, if no prefix found.
+ * @returns {bigint?} Parsed value or `null` if error.
  */
 function parseValue (str, radix = 10) {
   const negative = str[0] === '-'
@@ -256,6 +337,7 @@ function parseValue (str, radix = 10) {
   }
 
   if (str[0] === '0') {
+    // str has a prefix
     if (str.length > 1 && '0' <= str[1] && str[1] <= '9') {
       str = str.slice(1)
       str = '0o' + str
@@ -290,10 +372,14 @@ function parseValue (str, radix = 10) {
   return value
 }
 
+/**
+ * Represent a register value.
+ */
 class Value {
   /**
-   * @param {(bigint|number|string)} value
-   * @param {number} radix
+   * @param {(bigint|number|string)} [value=0] - The value to be parsed.
+   * @param {number} [radix=10]
+   *  The default base to parse the string as, if no prefix found.
    */
   constructor (value = 0, radix = 10) {
     switch (typeof value) {
@@ -312,8 +398,11 @@ class Value {
   }
 
   /**
-   * @param {string} str
-   * @param {number} radix
+   * Convert a string to bigint based on its prefix, and update the Value.
+   * @param {string} str - The string to be parsed.
+   * @param {number} [radix=10]
+   *  The default base to parse the string as, if no prefix found.
+   * @returns {boolean} `true` if parse succeeded.
    */
   parse (str, radix = 10) {
     const value = parseValue(str, radix)
@@ -325,7 +414,9 @@ class Value {
   }
 
   /**
-   * @param {number} radix
+   * Return the string representation of the value with appropriate prefix.
+   * @param {number} [radix=10] - The base to be used, affecting the prefix.
+   * @returns {string} A string representing this value.
    */
   toString (radix = 10) {
     const negative = this.value < 0n
@@ -354,18 +445,18 @@ class Value {
   }
 
   /**
-   * Toggle a bit by index
-   * @param {number} index
+   * Toggle a bit by index.
+   * @param {number} index - The index of the bit to be toggled.
    */
   toggle (index) {
     this.value ^= 1n << BigInt(index)
   }
 
   /**
-   * Set a field by index
-   * @param {number} index
-   * @param {number} width
-   * @param {bigint} value
+   * Set value of a field.
+   * @param {number} index - The index of the field, LSB is 0.
+   * @param {number} width - The width of the field.
+   * @param {bigint} value - Value of the field.
    */
   setField (index, width, value) {
     const bigIndex = BigInt(index)
@@ -377,10 +468,10 @@ class Value {
   }
 
   /**
-   * Get a field by index
-   * @param {number} index
-   * @param {number} width
-   * @returns {bigint} value
+   * Get value of a field.
+   * @param {number} index - The index of the field, LSB is 0.
+   * @param {number} width - The width of the field.
+   * @returns {bigint} Value of the field.
    */
   getField (index, width) {
     const bigIndex = BigInt(index)
@@ -389,25 +480,47 @@ class Value {
   }
 }
 
+/**
+ * Represent a register value and its width.
+ * @extends Value
+ */
 class Register extends Value {
+  /**
+   * @param {number} [width=1] - The width of the register.
+   */
   constructor (width = 1) {
     super()
-    /** @type {number} */
+    /**
+     * width of the register
+     * @type {number}
+     */
     this.width = width
   }
 
+  /**
+   * The minimum width to fully represent the register value.
+   */
   get minWidth () {
     return this.unsigned.toString(2).length
   }
 
+  /**
+   * 2^`width`
+   */
   get expWidth () {
     return 1n << BigInt(this.width)
   }
 
+  /**
+   * The register value as an unsigned number.
+   */
   get unsigned () {
     return new Value(this.value & (this.expWidth - 1n))
   }
 
+  /**
+   * The register value as a signed number.
+   */
   get signed () {
     const expWidth = 1n << BigInt(this.width)
     const halfExpWidth = 1n << BigInt(this.width - 1)
@@ -416,22 +529,28 @@ class Register extends Value {
   }
 
   /**
-   * @param {number} radix
-   * @param {boolean} signed
+   * Return the string representation of the register value with appropriate
+   * prefix.
+   * @param {number} [radix=10] - The base to be used, affecting the prefix.
+   * @param {boolean} [signed=false] - If true, the register will be signed.
+   * @returns {string} A string representing the value of this register.
    */
   toString (radix = 10, signed = false) {
     return (signed ? this.signed : this.unsigned).toString(radix)
   }
 
   /**
-   * Return the raw representation of the register
+   * Return the binary representation of the register.
+   * @returns {string} A binary string representing the register value, exactly
+   *  `width` long.
    */
   dump () {
     return this.unsigned.value.toString(2).padStart(this.width, '0')
   }
 
   /**
-   * Test if register can be treated as a float
+   * Test if register can be treated as an IEEE754 float.
+   * @returns {boolean} `true` if register can be treated as an IEEE754 float.
    */
   isFloat () {
     return this.width === 32 || this.width === 64
@@ -445,7 +564,12 @@ class Register extends Value {
   }
 
   /**
-   * @param {string} str
+   * Interrupt a string as a float and update the Register with its IEEE754
+   * format. The register width must be able to represent a float.
+   * @param {string} str - The string to be parsed.
+   * @returns {boolean} `true` if parse succeeded.
+   * @throws {RangeError} If the register width can not represent an IEEE754
+   *  float.
    */
   parseFloat (str) {
     this._checkFloat()
@@ -476,7 +600,11 @@ class Register extends Value {
   }
 
   /**
-   * Parse register as a float
+   * Return the register value as an IEEE754 float.
+   * @returns {number} The value of this register interrupted as an IEEE754
+   *  float.
+   * @throws {RangeError} If the register width can not represent an IEEE754
+   *  float.
    */
   toFloat () {
     this._checkFloat()
@@ -666,6 +794,9 @@ input_float.addEventListener('change', function (event) {
 
 // format
 
+/**
+ * Represent a lexer token.
+ */
 class Token {
   static EOF = 0
   static IDENTIFIER = 1
@@ -675,9 +806,9 @@ class Token {
   static OPERATOR = 5
 
   /**
-   * @param {number} type
-   * @param {string?} str
-   * @param {number?} index
+   * @param {number} type - Token type.
+   * @param {string?} str - Token string.
+   * @param {number?} index - Token index.
    */
   constructor (type, str, index) {
     this.type = type
@@ -686,26 +817,38 @@ class Token {
   }
 
   /**
-   * Test if token is of a given type
-   * @param {(number|string)} want
-   * @returns {boolean}
+   * Test if token is of a given type or string.
+   * @param {(number|string)} want - Wanted token type or string.
+   * @returns {boolean} `true` if matched.
    */
   match (want) {
     return typeof want === 'string' ? want === this.str : want === this.type
   }
 }
 
+/**
+ * A C-like lexer.
+ */
 class CLexer {
   /**
-   * @param {string} str
+   * @param {string} str - Input string.
    */
   constructor (str) {
-    /** @type {string} */
+    /**
+     * string buffer
+     * @type {string}
+     */
     this.buffer = str.replaceAll('\\\n', ' ').trimEnd()
-    /** @type {number} */
+    /**
+     * buffer pointer, `-1` is EOF
+     * @type {number}
+     */
     this.i = 0
   }
 
+  /**
+   * whether EOF is reached
+   */
   get isEOF () {
     if (this.i >= this.buffer.length) {
       this.i = -1
@@ -715,18 +858,25 @@ class CLexer {
   }
 
   /**
-   * @param {number} start
-   * @param {number} end
-   * @returns {string}
+   * Return a section of `buffer`.
+   * @param {number?} start
+   *  The index to the beginning of the specified portion.
+   * @param {number?} end
+   *  The index to the end of the specified portion. The substring includes the
+   *  characters up to, but not including, the character indicated by end.
+   *  If this value is not specified, the substring continues to the end of
+   *  `buffer`.
+   * @returns {string} The specified portion of `buffer`.
    */
   slice (start, end) {
     return this.buffer.slice(start, end)
   }
 
   /**
-   * Return next token
-   * @param {boolean} [prefetch = false] - Do not increase buffer pointer
-   * @returns {Token}
+   * Return next token.
+   * @param {boolean} [prefetch=false]
+   *  If true, do not increase the buffer pointer.
+   * @returns {Token} Next token.
    */
   next (prefetch = false) {
     if (this.i < 0) {
@@ -800,14 +950,15 @@ class CLexer {
   }
 
   /**
-   * Skip after the first delimiter
-   * @param {string} [delim = '\n']
-   * @returns {number} New buffer pointer
+   * Skip after the first `delim`.
+   * @param {string} [delim='\n'] - Delimiter.
+   * @returns {number} Index right before the first delim, or buffer length if
+   *  not found.
    */
   split (delim = '\n') {
     this.i = this.buffer.indexOf(delim, this.i)
     if (this.i < 0) {
-      return -1
+      return this.buffer.length
     }
     const res = this.i
     this.i += delim.length
@@ -815,9 +966,9 @@ class CLexer {
   }
 
   /**
-   * Consume repeated tokens
-   * @param {(number|string)} want
-   * @returns {boolean} Whether EOF was reached
+   * Consume repeated tokens.
+   * @param {(number|string)} want - Tokens to be consumed.
+   * @returns {boolean} `true` if EOF was reached.
    */
   exhaust (want) {
     const isString = typeof want === 'string'
@@ -845,25 +996,34 @@ class CLexer {
   }
 
   /**
-   * Test if next token is of given type
-   * @param {number} type
-   * @param {boolean} ignoreError Consume buffer regardless of error
-   * @returns {Token?} Matching token or null if not found
+   * Test if next token is of given type.
+   * @param {number} type - Token type to match.
+   * @param {boolean} [ignoreError=false]
+   *  If true, do not increase the buffer pointer if token does not match.
+   * @returns {Token?} Matched token or `null` if not found.
    */
   wantType (type, ignoreError = false) {
     return this._want(type, ignoreError, false)
   }
 
   /**
-   * Test if next token is of given string
-   * @param {string} str
-   * @param {boolean} ignoreError Consume buffer regardless of error
-   * @returns {Token?} Matching token or null if not found
+   * Test if next token is of given string.
+   * @param {string} str - String to match.
+   * @param {boolean} [ignoreError=false]
+   *  If true, do not increase the buffer pointer if token does not match.
+   * @returns {Token?} Matched token or `null` if not found.
    */
   wantStr (str, ignoreError = false) {
     return this._want(str, ignoreError, true)
   }
 
+  /**
+   * Test if next token is of given type or string.
+   * @param {string|number} grammar - String or type to match.
+   * @param {boolean} [ignoreError=false]
+   *  If true, do not increase the buffer pointer if token does not match.
+   * @returns {Token?} Matched token or `null` if not found.
+   */
   want (grammar, ignoreError = false) {
     const oldI = this.i
     const token = this.next()
@@ -877,10 +1037,12 @@ class CLexer {
   }
 
   /**
-   * Match buffer against given grammars
-   * @param {(number|string)[]} grammars
-   * @param {boolean} ignoreError Consume buffer regardless of error
-   * @returns {Token[]}
+   * Match buffer against given grammars.
+   * @param {(number|string)[]} grammars - Grammars to be matched.
+   * @param {boolean} [ignoreError=false]
+   *  If true, do not increase the buffer pointer if token does not match.
+   * @returns {Token[]} All matched tokens. If the length is less than
+   *  `grammars`', `grammars` were not accepted.
    */
   match (grammars, ignoreError = false) {
     const oldI = this.i
@@ -908,7 +1070,7 @@ class CLexer {
  */
 
 /**
- * Parse C-like enum definition
+ * Parse C-like enum definition.
  * @param {CLexer} lexer
  * @returns {EnumMap?}
  */
@@ -971,35 +1133,76 @@ class CLexer {
   return result
 }
 
+/**
+ * Represent a bit field.
+ */
 class Field {
+  /**
+   * @param {string} name - Field name.
+   * @param {number} width
+   *  Field width. If 0, the field is a single bit indicator.
+   * @param {number} index - Field index, LSB is 0.
+   * @param {string?} color - Field background HTML color.
+   * @param {string[]?} enumTypes - Names of enum types to be used.
+   */
   constructor (name, width, index, color, enumTypes) {
+    /**
+     * field name
+     * @type {string}
+     */
     this.name = name
+    /**
+     * field index
+     * @type {number}
+     */
     this.index = index
+    /**
+     * field width. If 0, the field is a single bit indicator
+     * @type {number}
+     */
     this.width = width
+    /**
+     * field background HTML color
+     * @type {string?}
+     */
     this.color = color
+    /**
+     * names of enum types to be used
+     * @type {string[]?}
+     */
     this.enumTypes = enumTypes
+    /**
+     * enum definitions
+     * @type {Map<string, bigint>}
+     */
     this.enums = new Map
   }
 
+  /**
+   * Convert a string to a Field object.
+   * @param {string} str - String to be parsed.
+   * @param {number?} regWidth - Register width, used to calculate field index.
+   * @returns {Field?} Parsed field or `null` if parsing failed.
+   */
   static fromString (str, regWidth) {
-    let index
-    let [name, width, color, enumTypes] = str.split(':').map(x => x.trim())
+    let width, index
+    let [name, strWidth, color, enumTypes] = str.split(':').map(x => x.trim())
 
-    if (!width) {
+    if (!strWidth) {
       // treat as 1-bit field
       width = 1
-    } else if ('0' > width[0] || width[0] > '9') {
+    } else if (strWidth[0] < '0' || '9' < strWidth[0]) {
       // bit indicator
-      index = parseInt(width.slice(1))
+      index = filterInt(strWidth.slice(1))
       if (isNaN(index)) {
-        return
+        return null
       }
       width = 0
     } else {
       // field
-      width = parseInt(width)
+      width = filterInt(strWidth)
       if (isNaN(width)) {
-        return
+        return null
       }
       if (regWidth !== undefined) {
         index = regWidth - width
@@ -1009,6 +1212,10 @@ class Field {
                      enumTypes && enumTypes.split(',').map(x => x.trim()))
   }
 
+  /**
+   * Return the string representation of the field.
+   * @returns {string} The string representing this field.
+   */
   toString () {
     let str = this.name
     str += ':'
@@ -1029,6 +1236,10 @@ class Field {
     return str
   }
 
+  /**
+   * whether the field is a bit indicator
+   * @type {boolean}
+   */
   get isBit () {
     return this.width === 1
   }
@@ -1037,6 +1248,10 @@ class Field {
     return other.index - self.index
   }
 
+  /**
+   * Collect enum definitions of `enumTypes` from `enums`.
+   * @param {Map<string?, EnumMap>} enums - Enum definitions.
+   */
   collectEnums (enums) {
     if (!this.enumTypes || this.enumTypes.length === 0) {
       return
@@ -1067,14 +1282,14 @@ class Format {
   /**
    * @param {Field[]?} fields
    * @param {Map<number, Field>?} bits
-   * @param {Map<string, EnumMap>?} enums
+   * @param {Map<string?, EnumMap>?} enums
    */
   constructor (fields, bits, enums) {
     /** @type {Field[]} */
     this.fields = fields || []
     /** @type {Map<number, Field>} */
     this.bits = bits || new Map
-    /** @type {Map<string, EnumMap>} */
+    /** @type {Map<string?, EnumMap>} */
     this.enums = enums || new Map
     /** @type {number} */
     this.width = 0
