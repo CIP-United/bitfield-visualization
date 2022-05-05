@@ -6,7 +6,7 @@ Decode a value (possibly extracted from a register) into bitfield values.
 
 Features:
 
-* All texts are changable; changes are synchronized across the whole application
+* All texts are changeable; changes are synchronized across the whole application
 * Auto-detect bin/oct/hex/decimal input
 * Specify bitfield name and background colour
 * Highlight a single bit

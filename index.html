@@ -1,85 +1,114 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8" />
 
-    <title></title>
+<meta charset="UTF-8" />
 
-    <!--external-->
-    <link rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css"
-      integrity="sha512-NhSC1YmyruXifcj/KFRWoC561YpHpc5Jtzgvbuzx5VozKpWvQ+4nXhPdFgmx8xqexRcpAglTj9sIBWINXa8x5w=="
-      crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <link href="bitfield.css" rel="stylesheet" />
-    <!--external-->
-    <style></style>
-  </head>
+<title>Bitfield Visualization</title>
 
-  <body>
-    <header>
-      <style>.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}</style>
-      <a href="https://github.com/CIP-United/bitfield-visualization" class="github-corner hidden-xs-down" aria-label="View source on Github">
-        <svg width="80" height="80" viewBox="0 0 250 250" style="fill:#151513; color:#fff; position: absolute; top: 0; border: 0; right: 0;" aria-hidden="true">
-          <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path>
-          <path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path>
-          <path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path>
-        </svg>
-      </a>
-    </header>
+<link rel="stylesheet"
+  href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css"
+  integrity="sha512-NhSC1YmyruXifcj/KFRWoC561YpHpc5Jtzgvbuzx5VozKpWvQ+4nXhPdFgmx8xqexRcpAglTj9sIBWINXa8x5w=="
+  crossorigin="anonymous" referrerpolicy="no-referrer" />
 
-    <div>
-      <div id="bitfield" class="bitfield">
-        <table class="bitfield-table">
-          <tbody>
-            <tr id="bitfield-bits">
-            </tr>
-            <tr id="bitfield-bits-value">
-            </tr>
-            <tr id="bitfield-fields-hex">
-            </tr>
-            <tr id="bitfield-fields">
-            </tr>
-            <tr id="bitfield-fields-enum">
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p>Value: <code id="bitfield-value-output"></code></p>
-    </div>
+<!--script-start-->
+<script defer="defer" src="bitfield-preload.js"></script>
+<script defer="defer" src="bitfield.js"></script>
+<!--script-end-->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  Array.prototype.forEach.call(
+    document.querySelectorAll('.bitfield'), x => bitfield(x))
+})
+</script>
 
-    <p>
-      <label for="bitfield-value">Input:</label>
-      <input type="text" id="bitfield-value" name="value" value="0b11101001100"/>
-    </p>
-    <p>
-      <label for="bitfield-value">Default radix:</label>
-      <input type="radio" id="bitfield-2" name="radix" value="2" />
-      <label for="bitfield-2">2</label>
-      <input type="radio" id="bitfield-8" name="radix" value="8" />
-      <label for="bitfield-8">8</label>
-      <input type="radio" id="bitfield-10" name="radix" value="10" />
-      <label for="bitfield-10">10</label>
-      <input type="radio" id="bitfield-16" name="radix" value="16" checked="checked" />
-      <label for="bitfield-16">16</label>
-    </p>
-    <p>
-      <input type="checkbox" id="bitfield-signed" name="conversions" value="signed" />
-      <label for="bitfield-signed">Signed int</label>
-      <span class="tooltip">?
-        <span class="tooltiptext">Uncheck to always show unsigned int</span>
-      </span>
-      <input type="checkbox" id="bitfield-float" name="conversions" value="float" />
-      <label for="bitfield-float">IEEE float</label>
-      <span class="tooltip">?
-        <span class="tooltiptext">Treat value as IEEE float, must be exactly 16, 32, 64 or 96 bits long</span>
-      </span>
-    </p>
+<header>
+  <style>
+    .github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}
+    @keyframes octocat-wave{
+      0%,100%{transform:rotate(0)}
+      20%,60%{transform:rotate(-25deg)}
+      40%,80%{transform:rotate(10deg)}
+    }
+    @media (max-width:500px){
+      .github-corner:hover .octo-arm{animation:none}
+      .github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}
+    }
+  </style>
+  <a href="https://github.com/CIP-United/bitfield-visualization" class="github-corner hidden-xs-down" aria-label="View source on Github">
+    <svg width="80" height="80" viewBox="0 0 250 250" style="fill:var(--fill); color:var(--color); position: absolute; top: 0; border: 0; right: 0;" aria-hidden="true">
+      <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z" fill="currentColor"></path>
+      <path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" style="transform-origin: 130px 106px;" class="octo-arm"></path>
+      <path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" class="octo-body"></path>
+    </svg>
+  </a>
+</header>
 
-    <div>
-      <p>
-        <label for="bitfield-format">Format:</label>
-      </p>
-      <textarea id="bitfield-format" name="format" rows="8" cols="80">
+<template id="bitfield">
+  <!--stylesheet-start-->
+  <link rel="stylesheet" href="bitfield.css" />
+  <!--stylesheet-end-->
+
+  <table class="bitfield-table">
+    <thead>
+      <tr class="bitfield-bits-index"></tr>
+    </thead>
+    <tbody>
+      <tr class="bitfield-bits-value"></tr>
+      <tr class="bitfield-fields-hex"></tr>
+    </tbody>
+    <thead>
+      <tr class="bitfield-fields-name"></tr>
+    </thead>
+    <tbody>
+      <tr class="bitfield-fields-enum"></tr>
+    </tbody>
+  </table>
+
+  <p>Value: <code class="bitfield-value-output"></code></p>
+  <p>
+    <label for="bitfield-value">
+      Input:
+      <input type="text" class="bitfield-value" name="value" />
+    </label>
+  </p>
+  <p>
+    <span>Default radix:</span>
+    <label>
+      <input type="radio" name="radix" value="2" />
+      2
+    </label>
+    <label>
+      <input type="radio" name="radix" value="8" />
+      8
+    </label>
+    <label>
+      <input type="radio" name="radix" value="10" />
+      10
+    </label>
+    <label>
+      <input type="radio" name="radix" value="16" checked="checked" />
+      16
+    </label>
+  </p>
+  <p>
+    <label>
+      <input type="checkbox" name="signed" />
+      Signed int
+    </label>
+    <span class="tooltip">?
+      <span class="tooltiptext">Uncheck to always show unsigned int</span>
+    </span>
+    <label for="bitfield-float">
+      <input type="checkbox" name="float" />
+      <span class="bitfield-float-label">IEEE float</span>
+    </label>
+    <span class="tooltip">?
+      <span class="tooltiptext">Treat value as IEEE float, must be exactly 16, 32, 64 or 96 bit long</span>
+    </span>
+  </p>
+
+  <label>
+    <p>Format:</p>
+    <p><textarea class="bitfield-format" name="format" rows="8" cols="80">
 enum Flags {
   FLAG_ZERO = 0,
   FLAG_ONE
@@ -94,51 +123,55 @@ bit1:#14:pink
 field2
 field3:7::FLAG
 field4:1:#44e4e4
-bit2:'23:blue</textarea>
-      <p>
-        <label for="bitfield-struct-select">Select saved struct:</label>
-        <select name="saved" id="bitfield-struct-select" alt="Select saved struct"></select>
-        <button title="Load struct" id="bitfield-struct-load">
-          <span>⤵️</span>
-          <span class="hideable">Load</span>
-        </button>
-        <button title="Delete struct" id="bitfield-struct-delete">
-          <span>❌</span>
-          <span class="hideable">Delete</span>
-        </button>
-      </p>
-      <p>
-        <input type="text" id="bitfield-struct-name" name="struct-name" placeholder="Enter struct name..." />
-        <button title="Save struct" id="bitfield-struct-save">
-          <span>💾</span>
-          <span class="hideable">Save</span>
-        </button>
-      </p>
-      <p>
-        <label for="bitfield-field-select">Select saved field:</label>
-        <select name="saved" id="bitfield-field-select" alt="Select saved field"></select>
-        <button title="Append field" id="bitfield-field-append">
-          <span>⬆️</span>
-          <span class="hideable">Append</span>
-        </button>
-        <button title="Delete field" id="bitfield-field-delete">
-          <span>❌</span>
-          <span class="hideable">Delete</span>
-        </button>
-      </p>
-      <p>
-        <input type="text" id="bitfield-field-desc" name="field-desc" placeholder="Enter field desc to save..." />
-        <button title="Add field" id="bitfield-field-add">
-          <span>➕</span>
-          <span class="hideable">Add</span>
-        </button>
-      </p>
-    </div>
+bit2:'23:blue</textarea></p>
+  </label>
 
-    <!--external-->
-    <script src="bitfield-preload.js"></script>
-    <script src="bitfield.js"></script>
-    <!--external-->
-    <script></script>
-  </body>
-</html>
+  <p>
+    <label>
+      Select saved struct:
+      <select class="bitfield-struct-select" name="saved" alt="Select saved struct"></select>
+    </label>
+    <button class="bitfield-struct-load" title="Load struct" type="button">
+      <span>⤵️</span>
+      <span class="hideable">Load</span>
+    </button>
+    <button class="bitfield-struct-delete" title="Delete struct" type="button">
+      <span>❌</span>
+      <span class="hideable">Delete</span>
+    </button>
+  </p>
+  <p>
+    <input type="text" class="bitfield-struct-name" name="struct-name" placeholder="Enter struct name..." />
+    <button class="bitfield-struct-save" title="Save struct" type="button">
+      <span>💾</span>
+      <span class="hideable">Save</span>
+    </button>
+  </p>
+
+  <p>
+    <label>
+      Select saved field:
+      <select class="bitfield-field-select" name="saved" alt="Select saved field"></select>
+    </label>
+    <button class="bitfield-field-append" title="Append field" type="button">
+      <span>⬆️</span>
+      <span class="hideable">Append</span>
+    </button>
+    <button class="bitfield-field-delete" title="Delete field" type="button">
+      <span>❌</span>
+      <span class="hideable">Delete</span>
+    </button>
+  </p>
+  <p>
+    <input type="text" class="bitfield-field-desc" name="field-desc" placeholder="Enter field desc to save..." />
+    <button class="bitfield-field-add" title="Add field" type="button">
+      <span>➕</span>
+      <span class="hideable">Add</span>
+    </button>
+  </p>
+</template>
+
+<main class="bitfield">
+  <noscript><p>This page requires JavaScript to be enabled.</p></noscript>
+  <p>Loading...</p>
+</main>

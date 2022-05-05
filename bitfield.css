@@ -1,37 +1,43 @@
 body {
-  margin: 8px;
+  --background-color: rgba(0, 0, 0, 0);
+  --fill: white;
+  --color: black;
+  margin: .5em;
+  background-color: var(--background-color);
+  color: var(--color);
+}
+
+.dark-mode {
+  --background-color: rgba(0, 0, 0, .75);
+  --fill: #404040;
+  --color: white;
 }
 
 .bitfield-table {
   background-color: #f8f9fa;
-  color: #202122;
-  margin: 1em 0;
-  border: 1px solid #a2a9b1;
   border-collapse: collapse;
   text-align: center;
   font-family: monospace,monospace;
-  font-size: 1em;
 }
 
-#bitfield-bits > th {
-  min-width: 2ch;
+.bitfield-table thead, .bitfield-table th {
+  background-color: #eaecf0;
 }
 
-.bitfield-table > tr > th, .bitfield-table > tr > td,
-.bitfield-table > * > tr > th, .bitfield-table > * > tr > td {
+.bitfield-table th, .bitfield-table td {
   border: 1px solid #a2a9b1;
   padding: 0.2em 0.4em;
 }
 
-.bitfield-table > tr > th, .bitfield-table > * > tr > th {
-  background-color: #eaecf0;
+.bitfield-bits-index th {
+  min-width: 2ch;
 }
 
-#bitfield-bits-value > td:hover {
+.bitfield-bits-value td:hover {
   cursor: pointer;
 }
 
-#bitfield-bits-value > td.bitfield-bits-named {
+.bitfield-bits-value td.bitfield-bits-named {
   background: repeating-linear-gradient(
     -45deg,
     #eaecf0,
@@ -41,7 +47,7 @@ body {
   );
 }
 
-#bitfield-fields-enum > td {
+.bitfield-fields-enum td {
   text-align: right;
 }
 
@@ -53,17 +59,17 @@ body {
 
 .tooltip .tooltiptext {
   visibility: hidden;
-  width: 120px;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  z-index: 1;
+  margin-left: -4em;
+  border-radius: 0.5em;
+  padding: 0.25em 0;
+  width: 8em;
   background-color: gray;
   color: white;
   text-align: center;
-  border-radius: 6px;
-  padding: 5px 0;
-  position: absolute;
-  z-index: 1;
-  bottom: 100%;
-  left: 50%;
-  margin-left: -60px;
 
   /* Fade in tooltip - takes 1 second to go from 0% to 100% opac: */
   opacity: 0;
