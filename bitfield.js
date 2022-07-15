@@ -1,28 +1,22 @@
 'use strict'
 
 /**
- * @typedef BitfieldOptions
- * @type {Object}
- * @property {[string, string][] | string} [preload=null]
+ * @param {HTMLElement} container
+ * @param {Object} options
+ * @param {[string, string][] | string} [options.preload]
  *  preloaded struct data; if set, `LocalStorage` will be disabled
- * @property {string} [storagePrefix='bitfield']
- *  prefix to use for `LocalStorage`
- * @property {string} [colorError='lightpink'] color to use for errors
- * @property {string} [colorWarning='lightyellow'] color to use for warnings
- * @property {number} [radix=16] default base to parse the input as
- * @property {boolean} [asSigned=false] whether to treat value as signed data
- * @property {boolean} [asFloat=false]
+ * @param {string} [options.storagePrefix] prefix to use for `LocalStorage`
+ * @param {string} [options.colorError] color to use for errors
+ * @param {string} [options.colorWarning] color to use for warnings
+ * @param {number} [options.radix] default base to parse the input as
+ * @param {boolean} [options.asSigned] whether to treat value as signed data
+ * @param {boolean} [options.asFloat]
  *  whether to interpret value as an IEEE754 float
  */
-
-/**
- * @param {HTMLElement} container
- * @param {BitfieldOptions} options
- */
 function bitfield (container, options = {}) {
-  options.preload ||= container.dataset.preload || null
+  options.preload ||= container.dataset.preload
   if (typeof options.preload === 'string') {
-    options.preload = self[options.preload] || null
+    options.preload = globalThis[options.preload]
   }
   options.storagePrefix ||= container.dataset.storagePrefix || 'bitfield'
   options.colorError ||= container.dataset.colorError || 'lightpink'
@@ -30,30 +24,20 @@ function bitfield (container, options = {}) {
 
   {
     const radix = localStorage.getItem(options.storagePrefix + '-radix')
-    if (radix !== null) {
-      options.radix = parseInt(radix)
-    }
-    options.radix ||= 16
+    options.radix = radix !== null ? parseInt(radix) : options.radix || 16
   }
   {
     const asSigned = localStorage.getItem(options.storagePrefix + '-signed')
-    if (asSigned !== null) {
-      options.asSigned = !!asSigned
-    } else if (!options.asSigned) {
-      options.asSigned = false
-    }
+    options.asSigned = asSigned !== null ? !!asSigned : !!options.asSigned
   }
   {
     const asFloat = localStorage.getItem(options.storagePrefix + '-float')
-    if (asFloat !== null) {
-      options.asFloat = !!asFloat
-    } else if (!options.asFloat) {
-      options.asFloat = false
-    }
+    options.asFloat = asFloat !== null ? !!asFloat : !!options.asFloat
   }
 
   /** @type {DocumentFragment} */
-  const node = document.getElementById('bitfield').content.cloneNode(true)
+  const node =
+    document.getElementById('bitfield-template').content.cloneNode(true)
 
 
   /********** utilities **********/
@@ -61,11 +45,11 @@ function bitfield (container, options = {}) {
   /**
    * Bind 'change' callback to radio buttons and set initial value.
    * @param {NodeListOf<HTMLInputElement>} radios Radio buttons.
-   * @param {(this: HTMLInputElement, event: Event) => void} callback
+   * @param {(this: HTMLInputElement, event: Event) => any} callback
    *  Callback for 'change' event.
    * @param {string} initialValue Initial value to select.
    */
-  function initRadioInputs (radios, callback, initialValue = null) {
+  function initRadioInputs (radios, callback, initialValue = undefined) {
     for (let i = 0; i < radios.length; i++) {
       const radio = radios[i]
       radio.addEventListener('change', callback)
@@ -81,7 +65,7 @@ function bitfield (container, options = {}) {
   /**
    * Convert a string to a bigint, based on its prefix.
    * @param {string} str The string to be parsed.
-   * @param {number} [radix=10]
+   * @param {number} radix
    *  The default base to parse the string as, if no prefix found.
    * @returns {bigint} Parsed value.
    * @throws {RangeError} If `radix` is not 2, 8, 10, or 16.
@@ -122,9 +106,12 @@ function bitfield (container, options = {}) {
    * Represent a register value.
    */
   class Value {
+    /** @type {bigint} */
+    value
+
     /**
-     * @param {(bigint|number|string)} [value=0] The value to be parsed.
-     * @param {number} [radix=10]
+     * @param {bigint | number | string} value The value to be parsed.
+     * @param {number} radix
      *  The default base to parse the string as, if no prefix found.
      */
     constructor (value = 0, radix = 10) {
@@ -143,7 +130,7 @@ function bitfield (container, options = {}) {
     /**
      * Convert a string to bigint based on its prefix, and update the Value.
      * @param {string} str The string to be parsed.
-     * @param {number} [radix=10]
+     * @param {number} radix
      *  The default base to parse the string as, if no prefix found.
      * @returns {boolean} `true` if parse succeeded.
      * @throws {RangeError} If `radix` is not 2, 8, 10, or 16.
@@ -162,7 +149,7 @@ function bitfield (container, options = {}) {
 
     /**
      * Return the string representation of the value with appropriate prefix.
-     * @param {number} [radix=10] The base to be used, affecting the prefix.
+     * @param {number} radix The base to be used, affecting the prefix.
      * @returns {string} A string representing this value.
      * @throws {RangeError} If `radix` is not 2, 8, 10, or 16.
      */
@@ -230,44 +217,45 @@ function bitfield (container, options = {}) {
 
   /**
    * Represent a register value and its width.
-   * @extends Value
    */
   class Register extends Value {
     /**
-     * @param {number} [width=1] The width of the register.
+     * width of the register
+     * @type {number}
+     */
+    width
+
+    /**
+     * @param {number} width The width of the register.
      */
     constructor (width = 1) {
       super()
-      /**
-       * width of the register
-       * @type {number}
-       */
       this.width = width
     }
 
     /**
-     * The minimum width to fully represent the register value.
+     * minimum width to fully represent the register value
      */
     get minWidth () {
       return this.unsigned.toString(2).length
     }
 
     /**
-     * Return 2^`width`.
+     * `2 ** width`
      */
     get expWidth () {
       return 1n << BigInt(this.width)
     }
 
     /**
-     * The register value as an unsigned number.
+     * register value as an unsigned number
      */
     get unsigned () {
       return new Value(this.value & (this.expWidth - 1n))
     }
 
     /**
-     * The register value as a signed number.
+     * register value as a signed number
      */
     get signed () {
       const expWidth = 1n << BigInt(this.width)
@@ -279,8 +267,8 @@ function bitfield (container, options = {}) {
     /**
      * Return the string representation of the register value with appropriate
      * prefix.
-     * @param {number} [radix=10] The base to be used, affecting the prefix.
-     * @param {boolean} [signed=false] If true, the register will be signed.
+     * @param {number} radix The base to be used, affecting the prefix.
+     * @param {boolean} signed If true, the register will be signed.
      * @returns {string} A string representing the value of this register.
      */
     toString (radix = 10, signed = false) {
@@ -316,8 +304,8 @@ function bitfield (container, options = {}) {
      * format. The register width must be able to represent a float.
      * @param {string} str The string to be parsed.
      * @returns {boolean} `true` if parse succeeded.
-     * @throws {RangeError} If the register width can not represent an IEEE754
-     *  float.
+     * @throws {RangeError}
+     *  If the register width can not represent an IEEE754 float.
      */
     parseFloat (str) {
       this._checkFloat()
@@ -349,10 +337,10 @@ function bitfield (container, options = {}) {
 
     /**
      * Return the register value as an IEEE754 float.
-     * @returns {number} The value of this register interrupted as an IEEE754
-     *  float.
-     * @throws {RangeError} If the register width can not represent an IEEE754
-     *  float.
+     * @returns {number}
+     *  The value of this register interrupted as an IEEE754 float.
+     * @throws {RangeError}
+     *  If the register width can not represent an IEEE754 float.
      */
     toFloat () {
       this._checkFloat()
@@ -595,11 +583,27 @@ function bitfield (container, options = {}) {
     static OPERATOR = 5
 
     /**
-     * @param {number} type Token type.
-     * @param {string?} str Token string.
-     * @param {number?} index Token index.
+     * token type
+     * @type {number}
      */
-    constructor (type, str, index) {
+    type
+    /**
+     * token string
+     * @type {string}
+     */
+    str
+    /**
+     * token index
+     * @type {number}
+     */
+    index
+
+    /**
+     * @param {number} type Token type.
+     * @param {string} str Token string.
+     * @param {number} index Token index.
+     */
+    constructor (type, str = '', index = -1) {
       this.type = type
       this.str = str
       this.index = index
@@ -607,7 +611,7 @@ function bitfield (container, options = {}) {
 
     /**
      * Test if token is of a given type or string.
-     * @param {(number|string)} want Wanted token type or string.
+     * @param {number | string} want Wanted token type or string.
      * @returns {boolean} `true` if matched.
      */
     match (want) {
@@ -620,19 +624,21 @@ function bitfield (container, options = {}) {
    */
   class CLexer {
     /**
+     * string buffer
+     * @type {string}
+     */
+    buffer
+    /**
+     * buffer pointer, `-1` is EOF
+     * @type {number}
+     */
+    i = 0
+
+    /**
      * @param {string} str Input string.
      */
     constructor (str) {
-      /**
-       * string buffer
-       * @type {string}
-       */
       this.buffer = str.replaceAll('\\\n', ' ').trimEnd()
-      /**
-       * buffer pointer, `-1` is EOF
-       * @type {number}
-       */
-      this.i = 0
     }
 
     /**
@@ -648,23 +654,22 @@ function bitfield (container, options = {}) {
 
     /**
      * Return a section of `buffer`.
-     * @param {number?} start
+     * @param {number} start
      *  The index to the beginning of the specified portion.
-     * @param {number?} end
+     * @param {number} end
      *  The index to the end of the specified portion. The substring includes
      *  the characters up to, but not including, the character indicated by end.
      *  If this value is not specified, the substring continues to the end of
      *  `buffer`.
      * @returns {string} The specified portion of `buffer`.
      */
-    slice (start, end) {
+    slice (start = undefined, end = undefined) {
       return this.buffer.slice(start, end)
     }
 
     /**
      * Return next token.
-     * @param {boolean} [prefetch=false]
-     *  If true, do not increase the buffer pointer.
+     * @param {boolean} prefetch If true, do not increase the buffer pointer.
      * @returns {Token} Next token.
      */
     next (prefetch = false) {
@@ -721,8 +726,8 @@ function bitfield (container, options = {}) {
         let indexTokenEnd = this.i + 1
         let testChar = this.buffer[indexTokenEnd]
         while (('0' <= testChar && testChar <= '9') ||
-              ('a' <= testChar && testChar <= 'z') ||
-              ('A' <= testChar && testChar <= 'Z') || testChar === '_') {
+               ('a' <= testChar && testChar <= 'z') ||
+               ('A' <= testChar && testChar <= 'Z') || testChar === '_') {
           indexTokenEnd++
           testChar = this.buffer[indexTokenEnd]
         }
@@ -740,9 +745,9 @@ function bitfield (container, options = {}) {
 
     /**
      * Skip after the first `delim`.
-     * @param {string} [delim='\n'] Delimiter.
-     * @returns {number} Index right before the first delim, or buffer length if
-     *  not found.
+     * @param {string} delim Delimiter.
+     * @returns {number}
+     *  Index right before the first delim, or buffer length if not found.
      */
     split (delim = '\n') {
       this.i = this.buffer.indexOf(delim, this.i)
@@ -756,7 +761,7 @@ function bitfield (container, options = {}) {
 
     /**
     * Consume repeated tokens.
-    * @param {(number|string)} want Tokens to be consumed.
+    * @param {number | string} want Tokens to be consumed.
     * @returns {boolean} `true` if EOF was reached.
     */
     exhaust (want) {
@@ -787,7 +792,7 @@ function bitfield (container, options = {}) {
     /**
      * Test if next token is of given type.
      * @param {number} type Token type to match.
-     * @param {boolean} [ignoreError=false]
+     * @param {boolean} ignoreError
      *  If true, do not increase the buffer pointer if token does not match.
      * @returns {Token?} Matched token or `null` if not found.
      */
@@ -798,7 +803,7 @@ function bitfield (container, options = {}) {
     /**
      * Test if next token is of given string.
      * @param {string} str String to match.
-     * @param {boolean} [ignoreError=false]
+     * @param {boolean} ignoreError
      *  If true, do not increase the buffer pointer if token does not match.
      * @returns {Token?} Matched token or `null` if not found.
      */
@@ -808,8 +813,8 @@ function bitfield (container, options = {}) {
 
     /**
      * Test if next token is of given type or string.
-     * @param {string|number} grammar String or type to match.
-     * @param {boolean} [ignoreError=false]
+     * @param {string | number} grammar String or type to match.
+     * @param {boolean} ignoreError
      *  If true, do not increase the buffer pointer if token does not match.
      * @returns {Token?} Matched token or `null` if not found.
      */
@@ -827,8 +832,8 @@ function bitfield (container, options = {}) {
 
     /**
      * Match buffer against given grammars.
-     * @param {(number|string)[]} grammars Grammars to be matched.
-     * @param {boolean} [ignoreError=false]
+     * @param {(number | string)[]} grammars Grammars to be matched.
+     * @param {boolean} ignoreError
      *  If true, do not increase the buffer pointer if token does not match.
      * @returns {Token[]} All matched tokens. If the length is less than
      *  `grammars`', `grammars` were not accepted.
@@ -852,8 +857,7 @@ function bitfield (container, options = {}) {
   }
 
   /**
-   * @typedef EnumMap
-   * @type {Map<string, bigint>}
+   * @typedef {Map<string, bigint>} EnumMap
    * @property {string} [0] enum name
    * @property {bigint} [1] enum value
    */
@@ -929,6 +933,37 @@ function bitfield (container, options = {}) {
    */
   class Field {
     /**
+     * field name
+     * @type {string}
+     */
+    name
+    /**
+     * field index
+     * @type {number}
+     */
+    index
+    /**
+     * field width. If 0, the field is a single bit indicator
+     * @type {number}
+     */
+    width
+    /**
+     * field background HTML color
+     * @type {string?}
+     */
+    color
+    /**
+     * names of enum types to be used
+     * @type {string[]?}
+     */
+    enumTypes
+    /**
+     * enum definitions
+     * @type {Map<string, bigint>}
+     */
+    enums = new Map
+
+    /**
      * @param {string} name Field name.
      * @param {number} width
      *  Field width. If 0, the field is a single bit indicator.
@@ -936,37 +971,12 @@ function bitfield (container, options = {}) {
      * @param {string?} color Field background HTML color.
      * @param {string[]?} enumTypes Names of enum types to be used.
      */
-    constructor (name, width, index, color, enumTypes) {
-      /**
-       * field name
-       * @type {string}
-       */
+    constructor (name, width, index, color = null, enumTypes = null) {
       this.name = name
-      /**
-       * field index
-       * @type {number}
-       */
       this.index = index
-      /**
-       * field width. If 0, the field is a single bit indicator
-       * @type {number}
-       */
       this.width = width
-      /**
-       * field background HTML color
-       * @type {string?}
-       */
       this.color = color
-      /**
-       * names of enum types to be used
-       * @type {string[]?}
-       */
       this.enumTypes = enumTypes
-      /**
-       * enum definitions
-       * @type {Map<string, bigint>}
-       */
-      this.enums = new Map
     }
 
     /**
@@ -975,7 +985,7 @@ function bitfield (container, options = {}) {
      * @param {number?} regWidth Register width, used to calculate field index.
      * @returns {Field?} Parsed field or `null` if parsing failed.
      */
-    static fromString (str, regWidth) {
+    static fromString (str, regWidth = null) {
       let width, index
       let [name, strWidth, color, enumTypes] = str.split(':').map(x => x.trim())
 
@@ -995,7 +1005,7 @@ function bitfield (container, options = {}) {
         if (isNaN(width)) {
           return null
         }
-        if (regWidth !== undefined) {
+        if (regWidth !== null) {
           index = regWidth - width
         }
       }
@@ -1076,20 +1086,24 @@ function bitfield (container, options = {}) {
    * Collection of bit fields and enum definitions.
    */
   class Format {
+    /** @type {Field[]} */
+    fields
+    /** @type {Map<number, Field>} */
+    bits
+    /** @type {Map<string?, EnumMap>} */
+    enums
+    /** @type {number} */
+    width = 0
+
     /**
-     * @param {Field[]?} fields
-     * @param {Map<number, Field>?} bits
-     * @param {Map<string?, EnumMap>?} enums
+     * @param {Field[]} fields
+     * @param {Map<number, Field>} bits
+     * @param {Map<string?, EnumMap>} enums
      */
-    constructor (fields, bits, enums) {
-      /** @type {Field[]} */
-      this.fields = fields || []
-      /** @type {Map<number, Field>} */
-      this.bits = bits || new Map
-      /** @type {Map<string?, EnumMap>} */
-      this.enums = enums || new Map
-      /** @type {number} */
-      this.width = 0
+    constructor (fields = [], bits = new Map, enums = new Map) {
+      this.fields = fields
+      this.bits = bits
+      this.enums = enums
     }
 
     /**
@@ -1418,22 +1432,32 @@ function bitfield (container, options = {}) {
    */
   class LocalMapStorage extends Map {
     /**
-     * @param {string} name
+     * the key of the map in the `LocalStorage`
+     * @type {string}
      */
-    constructor (name) {
-      super(JSON.parse(localStorage.getItem(name)))
-      this.name = name
+    storageKey
+
+    /**
+     * @param {string} storageKey
+     */
+    constructor (storageKey) {
+      super(JSON.parse(localStorage.getItem(storageKey)))
+      this.storageKey = storageKey
     }
 
+    /**
+     * Save the map to the local storage.
+     */
     store () {
       if (this.size) {
-        localStorage.setItem(this.name, JSON.stringify(Array.from(this)))
+        localStorage.setItem(this.storageKey, JSON.stringify(Array.from(this)))
       } else {
-        localStorage.removeItem(this.name)
+        localStorage.removeItem(this.storageKey)
       }
     }
 
     /**
+     * Test whether the value to the key in this map will be altered.
      * @param {string} key
      * @param {V} value
      * @returns {boolean}
@@ -1471,9 +1495,9 @@ function bitfield (container, options = {}) {
 
   /**
    * Manage K-V pairs in `LocalStorage` with `<select>` element.
-   * @typeparam {V} the value type
+   * @template V the value type
    * @param {HTMLSelectElement} select The `<select>` element.
-   * @param {string | Iterable<[string, V]>} keyOrData
+   * @param {string | Iterable<readonly [string, V]>} keyOrData
    *  The key to `LocalStorage` or preloaded data. When preload data provided,
    *  reading/writing to `LocalStorage` will be disabled.
    * @param {HTMLElement} btnAdd

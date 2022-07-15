@@ -4,11 +4,6 @@
 
 <title>Bitfield Visualization</title>
 
-<link rel="stylesheet"
-  href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css"
-  integrity="sha512-NhSC1YmyruXifcj/KFRWoC561YpHpc5Jtzgvbuzx5VozKpWvQ+4nXhPdFgmx8xqexRcpAglTj9sIBWINXa8x5w=="
-  crossorigin="anonymous" referrerpolicy="no-referrer" />
-
 <!--script-start-->
 <script defer="defer" src="bitfield-preload.js"></script>
 <script defer="defer" src="bitfield.js"></script>
@@ -16,7 +11,8 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   Array.prototype.forEach.call(
-    document.querySelectorAll('.bitfield'), x => bitfield(x))
+    document.querySelectorAll('.bitfield'),
+    x => bitfield(x, {preload: preloadStructData}))
 })
 </script>
 
@@ -42,7 +38,7 @@ document.addEventListener('DOMContentLoaded', function () {
   </a>
 </header>
 
-<template id="bitfield">
+<template id="bitfield-template">
   <!--stylesheet-start-->
   <link rel="stylesheet" href="bitfield.css" />
   <!--stylesheet-end-->
@@ -102,7 +98,9 @@ document.addEventListener('DOMContentLoaded', function () {
       <span class="bitfield-float-label">IEEE float</span>
     </label>
     <span class="tooltip">?
-      <span class="tooltiptext">Treat value as IEEE float, must be exactly 16, 32, 64 or 96 bit long</span>
+      <span class="tooltiptext">
+        Treat value as IEEE float, must be exactly 16, 32, 64 or 96 bit long
+      </span>
     </span>
   </p>
 
@@ -141,7 +139,8 @@ bit2:'23:blue</textarea></p>
     </button>
   </p>
   <p>
-    <input type="text" class="bitfield-struct-name" name="struct-name" placeholder="Enter struct name..." />
+    <input type="text" class="bitfield-struct-name" name="struct-name"
+      placeholder="Enter struct name..." />
     <button class="bitfield-struct-save" title="Save struct" type="button">
       <span>💾</span>
       <span class="hideable">Save</span>
@@ -163,7 +162,8 @@ bit2:'23:blue</textarea></p>
     </button>
   </p>
   <p>
-    <input type="text" class="bitfield-field-desc" name="field-desc" placeholder="Enter field desc to save..." />
+    <input type="text" class="bitfield-field-desc" name="field-desc"
+      placeholder="Enter field desc to save..." />
     <button class="bitfield-field-add" title="Add field" type="button">
       <span>➕</span>
       <span class="hideable">Add</span>
