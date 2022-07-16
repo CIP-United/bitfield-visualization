@@ -326,7 +326,7 @@ function bitfield (container, options = {}) {
           break
         case 8:
           new Float64Array(buf)[0] = value
-          this.value = BigInt(new BigUint64Array(buf)[0])
+          this.value = new BigUint64Array(buf)[0]
           break
         //case 12:
           //new Uint32Array(buf)[0] = value
@@ -347,19 +347,19 @@ function bitfield (container, options = {}) {
 
       const nbyte = this.width / 8
       const buf = new ArrayBuffer(nbyte)
-      const value = Number(this.unsigned)
+      const value = this.unsigned
       switch (nbyte) {
         //case 2:
-          //new Uint16Array(buf)[0] = value
+          //new Uint16Array(buf)[0] = Number(value.value)
           //break
         case 4:
-          new Uint32Array(buf)[0] = value
+          new Uint32Array(buf)[0] = Number(value.value)
           return new Float32Array(buf)[0]
         case 8:
-          new BigUint64Array(buf)[0] = value
+          new BigUint64Array(buf)[0] = value.value
           return new Float64Array(buf)[0]
         //case 12:
-          //new Uint32Array(buf)[0] = value
+          //new Uint32Array(buf)[0] = value.value
           //break
       }
     }
@@ -432,7 +432,7 @@ function bitfield (container, options = {}) {
      */
     toggle (initiator, table, output, input) {
       const index = Number(initiator.dataset.index)
-      if (!index) {
+      if (isNaN(index) || index < 0) {
         return
       }
       this.value.toggle(index)
@@ -564,7 +564,7 @@ function bitfield (container, options = {}) {
   checkboxFloat.addEventListener('change', function (event) {
     options.asFloat = event.target.checked
     localStorage.setItem(
-      options.storagePrefix + '-float', options.asFloat || '')
+      options.storagePrefix + '-float', options.asFloat ? '1' : '')
     registerValue.toOutput(outputValue)
   })
 
@@ -1436,6 +1436,11 @@ function bitfield (container, options = {}) {
      * @type {string}
      */
     storageKey
+    /**
+     * if `false`, remove the key from `LocalStorage` if map is empty
+     * @type {boolean}
+     */
+    keepEmpty = false
 
     /**
      * @param {string} storageKey
@@ -1449,7 +1454,7 @@ function bitfield (container, options = {}) {
      * Save the map to the local storage.
      */
     store () {
-      if (this.size) {
+      if (this.size > 0 || this.keepEmpty) {
         localStorage.setItem(this.storageKey, JSON.stringify(Array.from(this)))
       } else {
         localStorage.removeItem(this.storageKey)
@@ -1553,6 +1558,7 @@ function bitfield (container, options = {}) {
         btnDelete.disabled = true
       }
     } else {
+      data.keepEmpty = true
       if (btnAdd && factory) {
         btnAdd.addEventListener('click', function (event) {
           const item = factory(event)

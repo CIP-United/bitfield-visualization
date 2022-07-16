@@ -5,16 +5,9 @@
 <title>Bitfield Visualization</title>
 
 <!--script-start-->
-<script defer="defer" src="bitfield-preload.js"></script>
-<script defer="defer" src="bitfield.js"></script>
+<script async="async" src="bitfield.js"></script>
+<script async="async" src="index.js"></script>
 <!--script-end-->
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-  Array.prototype.forEach.call(
-    document.querySelectorAll('.bitfield'),
-    x => bitfield(x, {preload: preloadStructData}))
-})
-</script>
 
 <header>
   <style>
@@ -107,21 +100,14 @@ document.addEventListener('DOMContentLoaded', function () {
   <label>
     <p>Format:</p>
     <p><textarea class="bitfield-format" name="format" rows="8" cols="80">
-enum Flags {
-  FLAG_ZERO = 0,
-  FLAG_ONE
-  FLAG_THREE = 3,
-  "Long flags" = 4,,,
+enum Exponent {
+  EXPONENT_SUBNORMAL
+  EXPONENT_SPECIAL = 0xff
 }
-#define FLAG_ZERO 12345
-#define FLAG_FOUR 4
 
-field1:8:lime:Flags
-bit1:#14:pink
-field2
-field3:7::FLAG
-field4:1:#44e4e4
-bit2:'23:blue</textarea></p>
+sign:1:lightblue
+exponent:8:lightgreen:Exponent
+fraction:23:lightpink</textarea></p>
   </label>
 
   <p>
