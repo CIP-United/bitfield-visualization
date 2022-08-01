@@ -43,6 +43,30 @@ function bitfield (container, options = {}) {
   /********** utilities **********/
 
   /**
+   * @param {Blob} blob
+   * @returns {Promise<FileReader>}
+   */
+   function readFile (blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = function (event) {
+        resolve(event.target)
+      }
+      reader.onerror = reject
+      reader.readAsText(blob)
+    })
+  }
+
+  /**
+   * @param {HTMLInputElement} input
+   * @returns {Promise<FileReader>?}
+   */
+  function readInputFile (input) {
+    return !input.files || input.files.length === 0 ?
+      null : readFile(input.files[0])
+  }
+
+  /**
    * Bind 'change' callback to radio buttons and set initial value.
    * @param {NodeListOf<HTMLInputElement>} radios Radio buttons.
    * @param {(this: HTMLInputElement, event: Event) => any} callback
@@ -1441,13 +1465,26 @@ function bitfield (container, options = {}) {
      * @type {boolean}
      */
     keepEmpty = false
+    /**
+     * if `true`, do not auto save to `LocalStorage`
+     * @type {boolean}
+     */
+    delayMode = false
 
     /**
      * @param {string} storageKey
      */
     constructor (storageKey) {
-      super(JSON.parse(localStorage.getItem(storageKey)))
+      super()
       this.storageKey = storageKey
+
+      /** @type {[string, V][]?} */
+      const values = JSON.parse(localStorage.getItem(storageKey))
+      if (values) {
+        for (let i = 0; i < values.length; i++) {
+          super.set(values[i][0], values[i][1])
+        }
+      }
     }
 
     /**
@@ -1480,7 +1517,9 @@ function bitfield (container, options = {}) {
     set (key, value, force = false) {
       if (force || this.willSet(key, value)) {
         super.set(key, value)
-        this.store()
+        if (!this.delayMode) {
+          this.store()
+        }
       }
       return this
     }
@@ -1493,8 +1532,17 @@ function bitfield (container, options = {}) {
       if (!super.delete(key)) {
         return false
       }
-      this.store()
+      if (!this.delayMode) {
+        this.store()
+      }
       return true
+    }
+
+    clear () {
+      super.clear()
+      if (!this.delayMode) {
+        this.store()
+      }
     }
   }
 
@@ -1514,11 +1562,12 @@ function bitfield (container, options = {}) {
    * @param {(this: btnSelect, value: V, key: string, event: Event) => void} executor
    *  The action when `select` button is clicked.
    * @param {HTMLElement} btnDelete The delete button.
+   * @param {HTMLElement} btnClear The clear button.
    * @returns {Map<string, V>} The map of k-v pairs.
    */
   function kvStroageManage (
       select, keyOrData, btnAdd = null, factory = null,
-      btnSelect = null, executor = null, btnDelete = null) {
+      btnSelect = null, executor = null, btnDelete = null, btnClear = null) {
     // load data
     /** @type {LocalMapStorage<V>} */
     const data = typeof keyOrData === 'string' ?
@@ -1557,6 +1606,10 @@ function bitfield (container, options = {}) {
         btnDelete.title = title
         btnDelete.disabled = true
       }
+      if (btnClear) {
+        btnClear.title = title
+        btnClear.disabled = true
+      }
     } else {
       data.keepEmpty = true
       if (btnAdd && factory) {
@@ -1587,6 +1640,15 @@ function bitfield (container, options = {}) {
           select.selectedOptions[0].remove()
         })
       }
+      if (btnClear) {
+        btnClear.addEventListener('click', function (event) {
+          if (!confirm('Sure to clear?')) {
+            return
+          }
+          data.clear()
+          select.textContent = ''
+        })
+      }
     }
 
     return data
@@ -1595,7 +1657,7 @@ function bitfield (container, options = {}) {
   // manage saved structs
   /** @type {HTMLInputElement} */
   const inputStructName = node.querySelector('.bitfield-struct-name')
-  kvStroageManage(
+  const mapStruct = kvStroageManage(
     node.querySelector('.bitfield-struct-select'),
     options.preload || options.storagePrefix + '-structs-saved',
     node.querySelector('.bitfield-struct-save'), () => {
@@ -1612,10 +1674,44 @@ function bitfield (container, options = {}) {
       inputFormat.value = value
       drawFormat(inputFormat)
     },
-    node.querySelector('.bitfield-struct-delete'))
+    node.querySelector('.bitfield-struct-delete'),
+    node.querySelector('.bitfield-struct-clear'))
   if (options.preload) {
     inputStructName.disabled = true
     inputStructName.placeholder = 'Disabled for preload list'
+    node.querySelector('.bitfield-book-input').disabled = true
+    node.querySelector('.bitfield-book-load').disabled = true
+  } else {
+    node.querySelector('.bitfield-book-load').addEventListener(
+      'click', async function (event) {
+        const reader = await readInputFile(
+          container.querySelector('.bitfield-book-input'))
+        if (!reader) {
+          return
+        }
+
+        const book = JSON.parse(reader.result)
+        if (!Array.isArray(book)) {
+          alert('It does not look like a valid book.')
+          return
+        }
+
+        mapStruct.delayMode = true
+        for (let i = 0; i < book.length; i++) {
+          mapStruct.set(book[i][0], book[i][1])
+        }
+        mapStruct.delayMode = false
+        mapStruct.store()
+
+        const select = container.querySelector('.bitfield-struct-select')
+        select.textContent = ''
+        for (const [key, value] of mapStruct) {
+          const option = document.createElement('option')
+          option.value = key
+          option.textContent = key
+          select.appendChild(option)
+        }
+      })
   }
 
   // manage saved fields
@@ -1648,7 +1744,8 @@ function bitfield (container, options = {}) {
       inputFormat.value = format
       drawFormat(inputFormat)
     },
-    node.querySelector('.bitfield-field-delete'))
+    node.querySelector('.bitfield-field-delete'),
+    node.querySelector('.bitfield-field-clear'))
 
 
   container.textContent = ''
