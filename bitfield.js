@@ -1,52 +1,13 @@
 'use strict'
 
-/**
- * @param {HTMLElement} container
- * @param {Object} options
- * @param {[string, string][] | string} [options.preload]
- *  preloaded struct data; if set, `LocalStorage` will be disabled
- * @param {string} [options.storagePrefix] prefix to use for `LocalStorage`
- * @param {string} [options.colorError] color to use for errors
- * @param {string} [options.colorWarning] color to use for warnings
- * @param {number} [options.radix] default base to parse the input as
- * @param {boolean} [options.asSigned] whether to treat value as signed data
- * @param {boolean} [options.asFloat]
- *  whether to interpret value as an IEEE754 float
- */
-function bitfield (container, options = {}) {
-  options.preload ||= container.dataset.preload
-  if (typeof options.preload === 'string') {
-    options.preload = globalThis[options.preload]
-  }
-  options.storagePrefix ||= container.dataset.storagePrefix || 'bitfield'
-  options.colorError ||= container.dataset.colorError || 'lightpink'
-  options.colorWarning ||= container.dataset.colorWarning || 'lightyellow'
-
-  {
-    const radix = localStorage.getItem(options.storagePrefix + '-radix')
-    options.radix = radix !== null ? parseInt(radix) : options.radix || 16
-  }
-  {
-    const asSigned = localStorage.getItem(options.storagePrefix + '-signed')
-    options.asSigned = asSigned !== null ? !!asSigned : !!options.asSigned
-  }
-  {
-    const asFloat = localStorage.getItem(options.storagePrefix + '-float')
-    options.asFloat = asFloat !== null ? !!asFloat : !!options.asFloat
-  }
-
-  /** @type {DocumentFragment} */
-  const node =
-    document.getElementById('bitfield-template').content.cloneNode(true)
-
-
+{
   /********** utilities **********/
 
   /**
    * @param {Blob} blob
    * @returns {Promise<FileReader>}
    */
-   function readFile (blob) {
+  function readFile (blob) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
       reader.onload = function (event) {
@@ -57,6 +18,7 @@ function bitfield (container, options = {}) {
     })
   }
 
+
   /**
    * @param {HTMLInputElement} input
    * @returns {Promise<FileReader>?}
@@ -65,6 +27,7 @@ function bitfield (container, options = {}) {
     return !input.files || input.files.length === 0 ?
       null : readFile(input.files[0])
   }
+
 
   /**
    * Bind 'change' callback to radio buttons and set initial value.
@@ -119,7 +82,7 @@ function bitfield (container, options = {}) {
           numStr = '0x' + numStr
           break
         default:
-          throw RangeError('radix argument must be 2, 8, 10, 16')
+          throw new RangeError('radix must be 2, 8, 10, 16')
       }
     }
 
@@ -127,470 +90,31 @@ function bitfield (container, options = {}) {
   }
 
   /**
-   * Represent a register value.
+   * Return the string representation of the value with appropriate prefix.
+   * @param {bigint} value The value.
+   * @param {number} radix The base to be used, affecting the prefix.
+   * @returns {string} A string representing this value.
+   * @throws {RangeError} If `radix` is not 2, 8, 10, or 16.
    */
-  class Value {
-    /** @type {bigint} */
-    value
-
-    /**
-     * @param {bigint | number | string} value The value to be parsed.
-     * @param {number} radix
-     *  The default base to parse the string as, if no prefix found.
-     */
-    constructor (value = 0, radix = 10) {
-      switch (typeof value) {
-        case 'bigint':
-          this.value = value
-          break
-        case 'number':
-          this.value = BigInt(value)
-          break
-        default:
-          this.value = parseValue(value, radix)
-      }
+  function valueToString (value, radix = 10) {
+    let str = (value < 0n ? -value : value).toString(radix)
+    switch (radix) {
+      case 2:
+        str = '0b' + str
+        break
+      case 8:
+        str = '0' + str
+        break
+      case 10:
+        break
+      case 16:
+        str = '0x' + str
+        break
+      default:
+        throw new RangeError('radix must be 2, 8, 10 or 16')
     }
-
-    /**
-     * Convert a string to bigint based on its prefix, and update the Value.
-     * @param {string} str The string to be parsed.
-     * @param {number} radix
-     *  The default base to parse the string as, if no prefix found.
-     * @returns {boolean} `true` if parse succeeded.
-     * @throws {RangeError} If `radix` is not 2, 8, 10, or 16.
-     */
-    parse (str, radix = 10) {
-      try {
-        this.value = parseValue(str, radix)
-        return true
-      } catch (e) {
-        if (!(e instanceof SyntaxError)) {
-          throw e
-        }
-        return false
-      }
-    }
-
-    /**
-     * Return the string representation of the value with appropriate prefix.
-     * @param {number} radix The base to be used, affecting the prefix.
-     * @returns {string} A string representing this value.
-     * @throws {RangeError} If `radix` is not 2, 8, 10, or 16.
-     */
-    toString (radix = 10) {
-      const negative = this.value < 0n
-      let str = (negative ? -this.value : this.value).toString(radix)
-
-      switch (radix) {
-        case 2:
-          str = '0b' + str
-          break
-        case 8:
-          str = '0' + str
-          break
-        case 10:
-          break
-        case 16:
-          str = '0x' + str
-          break
-        default:
-          throw RangeError('toString() radix argument must be 2, 8, 10 or 16')
-      }
-      if (negative) {
-        str = '-' + str
-      }
-
-      return str
-    }
-
-    /**
-     * Toggle a bit by index.
-     * @param {number} index The index of the bit to be toggled.
-     */
-    toggle (index) {
-      this.value ^= 1n << BigInt(index)
-    }
-
-    /**
-     * Set value of a field.
-     * @param {number} index The index of the field, LSB is 0.
-     * @param {number} width The width of the field.
-     * @param {bigint} value Value of the field.
-     */
-    setField (index, width, value) {
-      const bigIndex = BigInt(index)
-      const bigWidth = BigInt(width)
-      // zero field
-      this.value &= ~(((1n << bigWidth) - 1n) << bigIndex)
-      // fill field
-      this.value |= (value & ((1n << bigWidth) - 1n)) << bigIndex
-    }
-
-    /**
-     * Get value of a field.
-     * @param {number} index The index of the field, LSB is 0.
-     * @param {number} width The width of the field.
-     * @returns {bigint} Value of the field.
-     */
-    getField (index, width) {
-      const bigIndex = BigInt(index)
-      const bigWidth = BigInt(width)
-      return (this.value >> bigIndex) & ((1n << bigWidth) - 1n)
-    }
+    return value < 0n ? '-' + str : str
   }
-
-  /**
-   * Represent a register value and its width.
-   */
-  class Register extends Value {
-    /**
-     * width of the register
-     * @type {number}
-     */
-    width
-
-    /**
-     * @param {number} width The width of the register.
-     */
-    constructor (width = 1) {
-      super()
-      this.width = width
-    }
-
-    /**
-     * minimum width to fully represent the register value
-     */
-    get minWidth () {
-      return this.unsigned.toString(2).length
-    }
-
-    /**
-     * `2 ** width`
-     */
-    get expWidth () {
-      return 1n << BigInt(this.width)
-    }
-
-    /**
-     * register value as an unsigned number
-     */
-    get unsigned () {
-      return new Value(this.value & (this.expWidth - 1n))
-    }
-
-    /**
-     * register value as a signed number
-     */
-    get signed () {
-      const expWidth = 1n << BigInt(this.width)
-      const halfExpWidth = 1n << BigInt(this.width - 1)
-      const value = this.value & (expWidth - 1n)
-      return new Value(value >= halfExpWidth ? value - expWidth : value)
-    }
-
-    /**
-     * Return the string representation of the register value with appropriate
-     * prefix.
-     * @param {number} radix The base to be used, affecting the prefix.
-     * @param {boolean} signed If true, the register will be signed.
-     * @returns {string} A string representing the value of this register.
-     */
-    toString (radix = 10, signed = false) {
-      return (signed ? this.signed : this.unsigned).toString(radix)
-    }
-
-    /**
-     * Return the binary representation of the register.
-     * @returns {string} A binary string representing the register value,
-     *  exactly `width` long.
-     */
-    dump () {
-      return this.unsigned.value.toString(2).padStart(this.width, '0')
-    }
-
-    /**
-     * Test if register can be treated as an IEEE754 float.
-     * @returns {boolean} `true` if register can be treated as an IEEE754 float.
-     */
-    isFloat () {
-      return this.width === 32 || this.width === 64
-      //return this.width === 16 || this.width === 32 || this.width === 64 || this.width === 96
-    }
-
-    _checkFloat () {
-      if (!this.isFloat()) {
-        throw RangeError('width must be 16, 32, 64 or 96')
-      }
-    }
-
-    /**
-     * Interrupt a string as a float and update the Register with its IEEE754
-     * format. The register width must be able to represent a float.
-     * @param {string} str The string to be parsed.
-     * @returns {boolean} `true` if parse succeeded.
-     * @throws {RangeError}
-     *  If the register width can not represent an IEEE754 float.
-     */
-    parseFloat (str) {
-      this._checkFloat()
-      const value = parseFloat(str)
-      if (isNaN(value)) {
-        return false
-      }
-
-      const nbyte = this.width / 8
-      const buf = new ArrayBuffer(nbyte)
-      switch (nbyte) {
-        //case 2:
-          //new Uint16Array(buf)[0] = value
-          //break
-        case 4:
-          new Float32Array(buf)[0] = value
-          this.value = BigInt(new Uint32Array(buf)[0])
-          break
-        case 8:
-          new Float64Array(buf)[0] = value
-          this.value = new BigUint64Array(buf)[0]
-          break
-        //case 12:
-          //new Uint32Array(buf)[0] = value
-          //break
-      }
-      return true
-    }
-
-    /**
-     * Return the register value as an IEEE754 float.
-     * @returns {number}
-     *  The value of this register interrupted as an IEEE754 float.
-     * @throws {RangeError}
-     *  If the register width can not represent an IEEE754 float.
-     */
-    toFloat () {
-      this._checkFloat()
-
-      const nbyte = this.width / 8
-      const buf = new ArrayBuffer(nbyte)
-      const value = this.unsigned
-      switch (nbyte) {
-        //case 2:
-          //new Uint16Array(buf)[0] = Number(value.value)
-          //break
-        case 4:
-          new Uint32Array(buf)[0] = Number(value.value)
-          return new Float32Array(buf)[0]
-        case 8:
-          new BigUint64Array(buf)[0] = value.value
-          return new Float64Array(buf)[0]
-        //case 12:
-          //new Uint32Array(buf)[0] = value.value
-          //break
-      }
-    }
-  }
-
-  const registerValue = {
-    value: new Register,
-    options,
-    inputNotSynced: false,
-
-    /**
-     * @param {HTMLElement} output
-     */
-    toOutput (output) {
-      let str = this.value.toString(this.options.radix, this.options.asSigned)
-      if (this.options.asFloat && this.value.isFloat()) {
-        str += ', ' + this.value.toFloat()
-      }
-      output.textContent = str + ' (' + this.value.toString(16) + ')'
-    },
-
-    /**
-     * @param {HTMLElement} input
-     * @param {boolean} force
-     */
-    toInput (input, force = false) {
-      if (this.inputNotSynced && !force) {
-        return
-      }
-      input.value = this.value.toString(this.options.radix)
-      localStorage.setItem(this.options.storagePrefix + '-value', input.value)
-    },
-
-    /**
-     * @param {HTMLElement} input
-     * @param {HTMLElement} output
-     */
-    read (input, output) {
-      const valueStr = input.value
-      if (this.value.parse(valueStr, this.options.radix) || (
-          this.options.asFloat && this.value.isFloat() &&
-          this.value.parseFloat(valueStr))) {
-        input.style.backgroundColor = ''
-        this.inputNotSynced = false
-        this.toOutput(output)
-        return true
-      }
-      input.style.backgroundColor = this.options.colorError
-      this.inputNotSynced = true
-      return false
-    },
-
-    /**
-     * @param {HTMLElement} initiator
-     * @param {HTMLElement} table
-     * @param {HTMLElement} output
-     * @param {HTMLElement} input
-     */
-    changed (initiator, table, output, input) {
-      this.toOutput(output)
-      this.toInput(input)
-      this.draw(initiator, table)
-    },
-
-    /**
-     * @param {HTMLElement} initiator
-     * @param {HTMLElement} table
-     * @param {HTMLElement} output
-     * @param {HTMLElement} input
-     */
-    toggle (initiator, table, output, input) {
-      const index = Number(initiator.dataset.index)
-      if (isNaN(index) || index < 0) {
-        return
-      }
-      this.value.toggle(index)
-      this.changed(initiator, table, output, input)
-    },
-
-    /**
-     * @param {bigint} value
-     * @param {HTMLElement} initiator
-     * @param {HTMLElement} table
-     * @param {HTMLElement} output
-     * @param {HTMLElement} input
-     */
-    setField (value, initiator, table, output, input) {
-      const dataset = initiator.parentElement.dataset
-      const index = Number(dataset.index)
-      if (!index) {
-        return
-      }
-      const width = Number(dataset.width)
-      if (!width) {
-        return
-      }
-      this.value.setField(index, width, value)
-      this.changed(initiator, table, output, input)
-    },
-
-    /**
-     * @param {HTMLElement} initiator
-     * @param {HTMLElement} table
-     * @param {HTMLElement} output
-     */
-    draw (initiator, table, output = null) {
-      if (this.value.width === 0) {
-        return false
-      }
-      if (output && !this.read(initiator, output)) {
-        return false
-      }
-
-      const tdsBitValue = table.querySelector('.bitfield-bits-value').children
-      const valueBits = this.value.dump()
-      for (let i = 0; i < tdsBitValue.length; i++) {
-        tdsBitValue[i].textContent = valueBits[i]
-      }
-
-      const tdsFieldHex = table.querySelector('.bitfield-fields-hex').children
-      for (let i = 0; i < tdsFieldHex.length; i++) {
-        const td = tdsFieldHex[i]
-        const div = td.firstElementChild
-        if (!div || div === initiator) {
-          continue
-        }
-        div.style.backgroundColor = ''
-        const dataset = td.dataset
-        div.textContent =
-          (dataset.width > 1 ? '0x' : '') + this.value.getField(
-            dataset.index, dataset.width).toString(16)
-      }
-
-      const tdsFieldEnum = table.querySelector('.bitfield-fields-enum').children
-      for (let i = 0; i < tdsFieldEnum.length; i++) {
-        const td = tdsFieldEnum[i]
-        const select = td.firstElementChild
-        if (!select || select === initiator) {
-          continue
-        }
-        const dataset = td.dataset
-        select.value =
-          this.value.getField(dataset.index, dataset.width).toString()
-      }
-
-      return true
-    }
-  }
-
-  /** @type {HTMLInputElement} */
-  const inputValue = node.querySelector('.bitfield-value')
-  /** @type {HTMLElement} */
-  const outputValue = node.querySelector('.bitfield-value-output')
-  /** @type {HTMLTableElement} */
-  const table = node.querySelector('.bitfield-table')
-
-  inputValue.addEventListener('input', function (event) {
-    /** @type {HTMLInputElement} */
-    const target = event.target
-    if (!target.value.trim()) {
-      target.style.backgroundColor = options.colorWarning
-      registerValue.inputNotSynced = true
-      return
-    }
-    localStorage.setItem(options.storagePrefix + '-value', target.value)
-    registerValue.draw(target, table, outputValue)
-  })
-  // load value after format drawing
-
-  /** @type {HTMLTableRowElement} */
-  const trBitsValue = node.querySelector('.bitfield-bits-value')
-  trBitsValue.addEventListener('click', function (event) {
-    registerValue.toggle(event.target, table, outputValue, inputValue)
-  })
-
-  // radix & signedness
-  initRadioInputs(
-    node.querySelectorAll('input[name="radix"]'), function (event) {
-      options.radix = parseInt(event.target.value)
-      localStorage.setItem(options.storagePrefix + '-radix', options.radix)
-      if (registerValue.inputNotSynced) {
-        registerValue.draw(inputValue, table, outputValue)  // try re-parse
-      } else {
-        registerValue.toOutput(outputValue)
-        registerValue.toInput(inputValue)
-      }
-    }, options.radix.toString())
-
-  /** @type {HTMLInputElement} */
-  const checkboxSigned = node.querySelector('input[name="signed"]')
-  checkboxSigned.checked = options.asSigned
-  checkboxSigned.addEventListener('change', function (event) {
-    options.asSigned = event.target.checked
-    localStorage.setItem(
-      options.storagePrefix + '-signed', options.asSigned || '')
-    registerValue.toOutput(outputValue)
-  })
-
-  /** @type {HTMLInputElement} */
-  const checkboxFloat = node.querySelector('input[name="float"]')
-  checkboxFloat.checked = options.asFloat
-  checkboxFloat.addEventListener('change', function (event) {
-    options.asFloat = event.target.checked
-    localStorage.setItem(
-      options.storagePrefix + '-float', options.asFloat ? '1' : '')
-    registerValue.toOutput(outputValue)
-  })
 
 
   /********** format **********/
@@ -598,7 +122,7 @@ function bitfield (container, options = {}) {
   /**
    * Represent a lexer token.
    */
-  class Token {
+   class Token {
     static EOF = 0
     static IDENTIFIER = 1
     static STRING = 2
@@ -642,6 +166,7 @@ function bitfield (container, options = {}) {
       return typeof want === 'string' ? want === this.str : want === this.type
     }
   }
+
 
   /**
    * A C-like lexer.
@@ -880,6 +405,7 @@ function bitfield (container, options = {}) {
     }
   }
 
+
   /**
    * @typedef {Map<string, bigint>} EnumMap
    * @property {string} [0] enum name
@@ -891,7 +417,7 @@ function bitfield (container, options = {}) {
    * @param {CLexer} lexer
    * @returns {[EnumMap?, string?]}
    */
-  function parseEnum (lexer) {
+   function parseEnum (lexer) {
     if (!lexer.wantStr('enum')) {
       return [null, null]
     }
@@ -952,6 +478,7 @@ function bitfield (container, options = {}) {
     return [result, className]
   }
 
+
   /**
    * Represent a bit field.
    */
@@ -982,6 +509,11 @@ function bitfield (container, options = {}) {
      */
     enumTypes
     /**
+     * field information
+     * @type {string?}
+     */
+    comment
+    /**
      * enum definitions
      * @type {Map<string, bigint>}
      */
@@ -994,13 +526,16 @@ function bitfield (container, options = {}) {
      * @param {number} index Field index, LSB is 0.
      * @param {string?} color Field background HTML color.
      * @param {string[]?} enumTypes Names of enum types to be used.
+     * @param {string?} comment Field information.
      */
-    constructor (name, width, index, color = null, enumTypes = null) {
+    constructor (
+        name, width, index, color = null, enumTypes = null, comment = null) {
       this.name = name
       this.index = index
       this.width = width
       this.color = color
       this.enumTypes = enumTypes
+      this.comment = comment
     }
 
     /**
@@ -1009,10 +544,11 @@ function bitfield (container, options = {}) {
      * @param {number?} regWidth Register width, used to calculate field index.
      * @returns {Field?} Parsed field or `null` if parsing failed.
      */
-    static fromString (str, regWidth = null) {
-      let width, index
-      let [name, strWidth, color, enumTypes] = str.split(':').map(x => x.trim())
+    static fromString (str, regWidth = 0) {
+      const [name, strWidth, color, enumTypes, comment] =
+        str.replaceAll('\\n', '\n').split(':').map(x => x.trim() || undefined)
 
+      let width, index
       if (!strWidth) {
         // treat as 1-bit field
         width = 1
@@ -1029,12 +565,16 @@ function bitfield (container, options = {}) {
         if (isNaN(width)) {
           return null
         }
-        if (regWidth !== null) {
+        if (regWidth > 0) {
           index = regWidth - width
+          if (index < 0) {
+            return null
+          }
         }
       }
-      return new Field(name, width, index, color,
-                       enumTypes && enumTypes.split(',').map(x => x.trim()))
+      return new Field(
+        name || '', width, index, color,
+        enumTypes && enumTypes.split(',').map(x => x.trim()), comment)
     }
 
     /**
@@ -1106,6 +646,7 @@ function bitfield (container, options = {}) {
     }
   }
 
+
   /**
    * Collection of bit fields and enum definitions.
    */
@@ -1150,7 +691,7 @@ function bitfield (container, options = {}) {
           const [_, key, value] = lexer.match([
             'define', Token.IDENTIFIER, Token.NUMERIC])
           if (!value) {
-            throw SyntaxError(
+            throw new SyntaxError(
               'Cannot parse C macro as a numeric define at ' + lexer.i)
           }
           anomEnum.set(key, parseValue(value))
@@ -1160,7 +701,7 @@ function bitfield (container, options = {}) {
           // enum with typedef
           const [enumMap, enumClass] = parseEnum(lexer)
           if (!enumMap) {
-            throw SyntaxError('Cannot parse a typedef at ' + lexer.i)
+            throw new SyntaxError('Cannot parse a typedef at ' + lexer.i)
           }
 
           token = lexer.wantType(Token.IDENTIFIER)
@@ -1181,7 +722,7 @@ function bitfield (container, options = {}) {
           lexer.i = token.index
           const [enumMap, enumClass] = parseEnum(lexer)
           if (!enumMap) {
-            throw SyntaxError('Cannot parse an enum at ' + lexer.i)
+            throw new SyntaxError('Cannot parse an enum at ' + lexer.i)
           }
 
           if (!enumClass) {
@@ -1196,7 +737,8 @@ function bitfield (container, options = {}) {
           const field =
             Field.fromString(lexer.slice(token.index, lexer.split()))
           if (!field) {
-            throw SyntaxError('Cannot parse a field description at ' + lexer.i)
+            throw new SyntaxError(
+              'Cannot parse a field description at ' + lexer.i)
           }
           if (field.width === 0) {
             format.bits.set(field.index, field)
@@ -1245,207 +787,6 @@ function bitfield (container, options = {}) {
     }
   }
 
-  /**
-   * @param {HTMLInputElement | HTMLTextAreaElement} input
-   * @returns {Format?}
-   */
-  function parseFormat (input) {
-    const formatStr = input.value
-    if (!formatStr) {
-      input.style.backgroundColor = ''
-      return null
-    }
-
-    let format
-    try {
-      format = Format.fromString(formatStr)
-    } catch (e) {
-      console.info('Parse error:', e)
-      input.style.backgroundColor = options.colorError
-      return null
-    }
-
-    if (format.isEmpty) {
-      input.style.backgroundColor = options.colorWarning
-      return null
-    }
-    input.style.backgroundColor = ''
-    return format
-  }
-
-  /** @type {HTMLTableRowElement} */
-  const trBitsIndex = node.querySelector('.bitfield-bits-index')
-  /** @type {HTMLTableRowElement} */
-  const trFieldsHex = node.querySelector('.bitfield-fields-hex')
-  /** @type {HTMLTableRowElement} */
-  const trFieldsName = node.querySelector('.bitfield-fields-name')
-  /** @type {HTMLTableRowElement} */
-  const trFieldsEnum = node.querySelector('.bitfield-fields-enum')
-  /** @type {HTMLElement} */
-  const labelFloat = node.querySelector('.bitfield-float-label')
-
-  /**
-   * Draw struct table and update register value.
-   * @param {HTMLInputElement | HTMLTextAreaElement} inputFormat
-   * @returns {boolean} `true` if draw success.
-   */
-  function drawFormat (inputFormat) {
-    const format = parseFormat(inputFormat)
-    if (!format) {
-      return false
-    }
-
-    // save format
-    registerValue.value.width = format.width
-    localStorage.setItem(options.storagePrefix + '-format', inputFormat.value)
-
-    // enable float support
-    if (registerValue.value.isFloat()) {
-      labelFloat.style.backgroundColor = ''
-      checkboxFloat.disabled = false
-    } else {
-      labelFloat.style.backgroundColor = options.colorWarning
-      checkboxFloat.disabled = true
-    }
-
-    // draw bits index and value
-    trBitsIndex.textContent = ''
-    trBitsValue.textContent = ''
-    for (let i = format.width - 1; i >= 0; i--) {
-      // bit index
-      trBitsIndex.insertAdjacentHTML('beforeend', '<th>' + i + '</th>')
-
-      // bit value
-      let strThBitValue = '<td '
-      const field = format.bits.get(i)
-      if (field) {
-        strThBitValue +=
-          'class="bitfield-bits-named" title="' + field.name + '" '
-        if (field.color) {
-          strThBitValue += 'style="background:' + field.color + ';" '
-        }
-      }
-      strThBitValue += 'data-index="' + i + '"></td>'
-      trBitsValue.insertAdjacentHTML('beforeend', strThBitValue)
-    }
-
-    // draw fields name and hex
-    let fieldsHaveEnums = false
-    trFieldsHex.textContent = ''
-    trFieldsName.textContent = ''
-    for (let i = 0; i < format.fields.length; i++) {
-      const field = format.fields[i]
-
-      // field hex
-      trFieldsHex.insertAdjacentHTML(
-        'beforeend',
-        '<td colspan="' + field.width + '" data-index="' + field.index +
-        '" data-width="' + field.width + '"><div contenteditable></div></td>')
-
-      // field name
-      let strThFieldName = '<th colspan="' + field.width + '"'
-      if (field.color) {
-        strThFieldName += ' style="background-color:' + field.color + ';"'
-      }
-      strThFieldName += '></th>'
-      trFieldsName.insertAdjacentHTML('beforeend', strThFieldName)
-      trFieldsName.lastElementChild.textContent = field.name
-
-      // prepare to draw enums
-      if (field.enumTypes) {
-        fieldsHaveEnums = true
-      }
-    }
-    /** @type {NodeListOf<HTMLDivElement>} */
-    const divs = trFieldsHex.querySelectorAll('div[contenteditable]')
-    for (let i = 0; i < divs.length; i++) {
-      divs[i].addEventListener('input', function (event) {
-        /** @type {HTMLDivElement} */
-        const target = event.target
-
-        let value
-        try {
-          value = parseValue(target.textContent, options.radix)
-        } catch (e) {
-          if (!(e instanceof SyntaxError)) {
-            throw e
-          }
-          target.style.backgroundColor = options.colorError
-          return false
-        }
-        target.style.backgroundColor = ''
-
-        registerValue.setField(value, target, table, outputValue, inputValue)
-      })
-    }
-
-    // draw fields enum
-    trFieldsEnum.textContent = ''
-    if (fieldsHaveEnums) {
-      for (let i = 0; i < format.fields.length; i++) {
-        const field = format.fields[i]
-        trFieldsEnum.insertAdjacentHTML(
-          'beforeend',
-          '<td colspan="' + field.width + '" data-index="' + field.index +
-          '" data-width="' + field.width + '"></td>')
-        if (field.enums.size === 0) {
-          continue
-        }
-        const td = trFieldsEnum.lastElementChild
-        td.innerHTML = '<select><option value=""></option></select>'
-        const select = td.firstElementChild
-        field.enums.forEach((value, key) => {
-          const option = document.createElement('option')
-          option.value = value
-          option.textContent = '(0x' + value.toString(16) + ') ' + key
-          select.appendChild(option)
-        })
-      }
-      const selects = trFieldsEnum.querySelectorAll('select')
-      for (let i = 0; i < selects.length; i++) {
-        selects[i].addEventListener('change', function (event) {
-          /** @type {HTMLSelectElement} */
-          const target = event.target
-          const valueStr = target.value
-          if (!valueStr) {
-            return
-          }
-
-          let value
-          try {
-            value = BigInt(valueStr)
-          } catch {
-            console.error(target, 'has option that do not has a valid value')
-            return false
-          }
-
-          registerValue.setField(value, target, table, outputValue, inputValue)
-        })
-      }
-    }
-
-    registerValue.draw(inputValue, table, outputValue)
-    return true
-  }
-
-  const oldValue = localStorage.getItem(options.storagePrefix + '-value')
-  if (oldValue) {
-    inputValue.value = oldValue
-  } else {
-    registerValue.toInput(inputValue, true)
-  }
-
-  /** @type {HTMLInputElement | HTMLTextAreaElement} */
-  const inputFormat = node.querySelector('.bitfield-format')
-  inputFormat.addEventListener('input', function (event) {
-    drawFormat(event.target)
-  })
-  const oldFormat = localStorage.getItem(options.storagePrefix + '-format')
-  if (oldFormat) {
-    inputFormat.value = oldFormat
-  }
-  drawFormat(inputFormat)
-
 
   /********** k-v storage **********/
 
@@ -1454,7 +795,7 @@ function bitfield (container, options = {}) {
    * @template V the value type
    * @extends {Map<string, V>}
    */
-  class LocalMapStorage extends Map {
+   class LocalMapStorage extends Map {
     /**
      * the key of the map in the `LocalStorage`
      * @type {string}
@@ -1546,13 +887,12 @@ function bitfield (container, options = {}) {
     }
   }
 
+
   /**
    * Manage K-V pairs in `LocalStorage` with `<select>` element.
    * @template V the value type
    * @param {HTMLSelectElement} select The `<select>` element.
-   * @param {string | Iterable<readonly [string, V]>} keyOrData
-   *  The key to `LocalStorage` or preloaded data. When preload data provided,
-   *  reading/writing to `LocalStorage` will be disabled.
+   * @param {string} key The key to `LocalStorage`.
    * @param {HTMLElement} btnAdd
    *  The add button. Call `factory` for a new k-v pair.
    * @param {(this: btnAdd, event: Event) => [string, V]?} factory
@@ -1563,15 +903,15 @@ function bitfield (container, options = {}) {
    *  The action when `select` button is clicked.
    * @param {HTMLElement} btnDelete The delete button.
    * @param {HTMLElement} btnClear The clear button.
-   * @returns {Map<string, V>} The map of k-v pairs.
+   * @returns {LocalMapStorage<V>} The map of k-v pairs.
    */
   function kvStroageManage (
-      select, keyOrData, btnAdd = null, factory = null,
-      btnSelect = null, executor = null, btnDelete = null, btnClear = null) {
+      select, key, btnAdd = undefined, factory = undefined,
+      btnSelect = undefined, executor = undefined, btnDelete = undefined,
+      btnClear = undefined) {
     // load data
     /** @type {LocalMapStorage<V>} */
-    const data = typeof keyOrData === 'string' ?
-      new LocalMapStorage(keyOrData) : new Map(keyOrData)
+    const data = new LocalMapStorage(key)
     for (const [key, value] of data) {
       const option = document.createElement('option')
       option.value = key
@@ -1592,162 +932,869 @@ function bitfield (container, options = {}) {
           return
         }
         executor(value, key, event)
-      })
+      }, {passive: true})
     }
 
     // bind btnAdd and btnDelete
-    if (typeof keyOrData !== 'string') {
-      const title = 'Disabled for preload list'
-      if (btnAdd) {
-        btnAdd.title = title
-        btnAdd.disabled = true
-      }
-      if (btnDelete) {
-        btnDelete.title = title
-        btnDelete.disabled = true
-      }
-      if (btnClear) {
-        btnClear.title = title
-        btnClear.disabled = true
-      }
-    } else {
-      data.keepEmpty = true
-      if (btnAdd && factory) {
-        btnAdd.addEventListener('click', function (event) {
-          const item = factory(event)
-          if (!item) {
-            return
-          }
-          const [key, value] = item
-          const oldValue = data.get(key)
-          if (oldValue !== undefined && !data.willSet(key, value)) {
-            return
-          }
-          data.set(key, value, true)
-          if (oldValue === undefined) {
-            const option = document.createElement('option')
-            option.value = item[0]
-            option.textContent = item[0]
-            select.appendChild(option)
-          }
-        })
-      }
-      if (btnDelete) {
-        btnDelete.addEventListener('click', function (event) {
-          if (!select.value || !data.delete(select.value)) {
-            return
-          }
-          select.selectedOptions[0].remove()
-        })
-      }
-      if (btnClear) {
-        btnClear.addEventListener('click', function (event) {
-          if (!confirm('Sure to clear?')) {
-            return
-          }
-          data.clear()
-          select.textContent = ''
-        })
-      }
+    data.keepEmpty = true
+    if (btnAdd && factory) {
+      btnAdd.addEventListener('click', function (event) {
+        const item = factory(event)
+        if (!item) {
+          return
+        }
+        const [key, value] = item
+        const oldValue = data.get(key)
+        if (oldValue !== undefined && !data.willSet(key, value)) {
+          return
+        }
+        data.set(key, value, true)
+        if (oldValue === undefined) {
+          const option = document.createElement('option')
+          option.value = item[0]
+          option.textContent = item[0]
+          select.appendChild(option)
+        }
+      }, {passive: true})
     }
+    btnDelete?.addEventListener('click', function (event) {
+      if (!select.value || !data.delete(select.value)) {
+        return
+      }
+      select.selectedOptions[0].remove()
+    }, {passive: true})
+
+    btnClear?.addEventListener('click', function (event) {
+      if (!confirm('Sure to clear?')) {
+        return
+      }
+      data.clear()
+      select.textContent = ''
+    }, {passive: true})
 
     return data
   }
 
-  // manage saved structs
-  /** @type {HTMLInputElement} */
-  const inputStructName = node.querySelector('.bitfield-struct-name')
-  const mapStruct = kvStroageManage(
-    node.querySelector('.bitfield-struct-select'),
-    options.preload || options.storagePrefix + '-structs-saved',
-    node.querySelector('.bitfield-struct-save'), () => {
-      if (!inputStructName.value) {
-        inputStructName.style.backgroundColor = options.colorWarning
-        return
-      }
-      if (!parseFormat(inputFormat)) {
-        return
-      }
-      return [inputStructName.value, inputFormat.value]
-    },
-    node.querySelector('.bitfield-struct-load'), value => {
-      inputFormat.value = value
-      drawFormat(inputFormat)
-    },
-    node.querySelector('.bitfield-struct-delete'),
-    node.querySelector('.bitfield-struct-clear'))
-  if (options.preload) {
-    inputStructName.disabled = true
-    inputStructName.placeholder = 'Disabled for preload list'
-    node.querySelector('.bitfield-book-input').disabled = true
-    node.querySelector('.bitfield-book-load').disabled = true
-  } else {
-    node.querySelector('.bitfield-book-load').addEventListener(
-      'click', async function (event) {
-        const reader = await readInputFile(
-          container.querySelector('.bitfield-book-input'))
-        if (!reader) {
+
+  /********** elements **********/
+
+  class BitfieldTable extends HTMLTableElement {
+    static template = document.createElement('template')
+
+    static {
+      this.template.innerHTML = `<thead>
+  <tr class="bitfield-bits-index"></tr>
+</thead>
+<tbody>
+  <tr class="bitfield-bits-value"></tr>
+  <tr class="bitfield-fields-hex"></tr>
+</tbody>
+<thead>
+  <tr class="bitfield-fields-name"></tr>
+</thead>
+<tbody>
+  <tr class="bitfield-fields-enum"></tr>
+</tbody>`
+    }
+
+    /**
+     * register width
+     */
+    #regWidth = 0
+    /**
+     * register value
+     */
+    #value = 0n
+
+    constructor () {
+      super()
+
+      this.appendChild(this.constructor.template.content.cloneNode(true))
+
+      this.#trBitsValue.addEventListener('click', event => {
+        /** @type {HTMLTableCellElement} */
+        const target = event.target
+        if (target.tagName !== 'TD') {
           return
         }
 
-        const book = JSON.parse(reader.result)
-        if (!Array.isArray(book)) {
-          alert('It does not look like a valid book.')
+        const value = +!Number(target.textContent)
+        target.textContent = value
+
+        this.change(BigInt(value), Number(target.dataset.index) || 0, 1, target)
+      }, {passive: true})
+
+      this.#trFieldsHex.addEventListener('input', event => {
+        /** @type {HTMLDivElement} */
+        const target = event.target
+        if (target.tagName !== 'DIV' || !target.isContentEditable) {
+          return
+        }
+        const strValue = target.textContent.trim()
+        if (strValue === '') {
+          target.style.backgroundColor =
+            this.getAttribute('color-warning') ?? 'lightyellow'
+          return
+        }
+        const cell = target.closest('td')
+        if (cell === null) {
           return
         }
 
-        mapStruct.delayMode = true
-        for (let i = 0; i < book.length; i++) {
-          mapStruct.set(book[i][0], book[i][1])
+        let value
+        try {
+          value = parseValue(strValue, Number(this.getAttribute('radix')) || 16)
+        } catch (e) {
+          if (!(e instanceof SyntaxError)) {
+            throw e
+          }
+          target.style.backgroundColor =
+            this.getAttribute('color-error') ?? 'lightpink'
+          return
         }
-        mapStruct.delayMode = false
-        mapStruct.store()
+        target.style.backgroundColor = ''
 
-        const select = container.querySelector('.bitfield-struct-select')
-        select.textContent = ''
-        for (const [key, value] of mapStruct) {
-          const option = document.createElement('option')
-          option.value = key
-          option.textContent = key
-          select.appendChild(option)
+        this.change(
+          value, Number(cell.dataset.index) || 0,
+          Number(cell.dataset.width) || 1, cell)
+      }, {passive: true})
+
+      this.#trFieldsEnum.addEventListener('change', event => {
+        /** @type {HTMLSelectElement} */
+        const target = event.target
+        if (target.tagName !== 'SELECT') {
+          return
         }
-      })
+        const strValue = target.value
+        if (strValue === '') {
+          return
+        }
+        const cell = target.closest('td')
+        if (cell === null) {
+          return
+        }
+
+        let value
+        try {
+          value = BigInt(strValue)
+        } catch {
+          console.error(target, 'has option that do not has a valid value')
+          return
+        }
+
+        this.change(
+          value, Number(cell.dataset.index) || 0,
+          Number(cell.dataset.width) || 1, cell)
+      }, {passive: true})
+    }
+
+    /** @type {HTMLTableRowElement} */
+    get #trBitsIndex () {
+      return this.querySelector('.bitfield-bits-index')
+    }
+
+    /** @type {HTMLTableRowElement} */
+    get #trBitsValue () {
+      return this.querySelector('.bitfield-bits-value')
+    }
+
+    /** @type {HTMLTableRowElement} */
+    get #trFieldsHex () {
+      return this.querySelector('.bitfield-fields-hex')
+    }
+
+    /** @type {HTMLTableRowElement} */
+    get #trFieldsName () {
+      return this.querySelector('.bitfield-fields-name')
+    }
+
+    /** @type {HTMLTableRowElement} */
+    get #trFieldsEnum () {
+      return this.querySelector('.bitfield-fields-enum')
+    }
+
+    get value () {
+      return this.#value
+    }
+
+    set value (value) {
+      this.#setValue(value)
+    }
+
+    /**
+     * @param {bigint} value
+     * @param {HTMLElement} initiator
+     */
+    #setValue (value = this.#value, initiator = undefined) {
+      this.#value = value
+      if (this.#regWidth <= 0) {
+        return value
+      }
+
+      const tdsBitValue = this.#trBitsValue.children
+      for (let i = 0; i < tdsBitValue.length; i++) {
+        const td = tdsBitValue[i]
+        if (initiator === td) {
+          continue
+        }
+
+        const index = td.dataset.index ? BigInt(td.dataset.index) : 0n
+        td.textContent = value & (1n << index) ? '1' : '0'
+      }
+
+      const tdsFieldHex = this.#trFieldsHex.children
+      for (let i = 0; i < tdsFieldHex.length; i++) {
+        const td = tdsFieldHex[i]
+        if (initiator === td) {
+          continue
+        }
+
+        const div = td.firstElementChild
+        if (!div) {
+          continue
+        }
+        div.style.backgroundColor = ''
+
+        const index = td.dataset.index ? BigInt(td.dataset.index) : 0n
+        const width = td.dataset.width ? BigInt(td.dataset.width) : 1n
+        div.textContent =
+          (width > 1n ? '0x' : '') +
+          ((value >> index) & ((1n << width) - 1n)).toString(16)
+      }
+
+      const tdsFieldEnum = this.#trFieldsEnum.children
+      for (let i = 0; i < tdsFieldEnum.length; i++) {
+        const td = tdsFieldEnum[i]
+        if (initiator === td) {
+          continue
+        }
+
+        const select = td.firstElementChild
+        if (!select) {
+          continue
+        }
+
+        const index = td.dataset.index ? BigInt(td.dataset.index) : 0n
+        const width = td.dataset.width ? BigInt(td.dataset.width) : 1n
+        select.value = ((value >> index) & ((1n << width) - 1n)).toString()
+      }
+
+      return value
+    }
+
+    /**
+     * Change a field in the value.
+     * @param {bigint} field Field value.
+     * @param {number} index Field index.
+     * @param {number} width Field width.
+     * @param {HTMLElement} initiator Change initiator.
+     */
+    change (field, index, width = 1, initiator = undefined) {
+      const bigIndex = BigInt(index)
+      const mask = (1n << BigInt(width)) - 1n
+      const value =
+        this.#value & ~(mask << bigIndex) | ((field & mask) << bigIndex)
+
+      this.#setValue(value, initiator)
+      this.dispatchEvent(new CustomEvent('valuechange', {detail: value}))
+    }
+
+    clear () {
+      this.#regWidth = 0
+      this.#trBitsIndex.textContent = ''
+      this.#trBitsValue.textContent = ''
+      this.#trFieldsHex.textContent = ''
+      this.#trFieldsName.textContent = ''
+      this.#trFieldsEnum.textContent = ''
+    }
+
+    /**
+     * Draw struct table.
+     * @param {Format} format Format.
+     */
+    setFormat (format) {
+      this.#regWidth = format.width
+
+      // draw bits index and value
+      const trBitsIndex = this.#trBitsIndex
+      const trBitsValue = this.#trBitsValue
+      trBitsIndex.textContent = ''
+      trBitsValue.textContent = ''
+
+      for (let i = format.width - 1; i >= 0; i--) {
+        const s = i.toString()
+
+        // bit index
+        const index = document.createElement('th')
+        index.textContent = s
+        trBitsIndex.appendChild(index)
+
+        // bit value
+        const value = document.createElement('td')
+        const field = format.bits.get(i)
+        if (field) {
+          value.className = 'bitfield-bits-named'
+          value.title = field.name
+          if (field.color) {
+            value.style.backgroundColor = field.color
+          }
+        }
+        value.dataset.index = s
+        trBitsValue.appendChild(value)
+      }
+
+      // draw fields name and hex
+      const trFieldsHex = this.#trFieldsHex
+      const trFieldsName = this.#trFieldsName
+      trFieldsHex.textContent = ''
+      trFieldsName.textContent = ''
+
+      let fieldsHaveEnums = false
+      for (let i = 0; i < format.fields.length; i++) {
+        const field = format.fields[i]
+
+        // field hex
+        const hex = document.createElement('td')
+        hex.colSpan = field.width
+        hex.dataset.index = field.index
+        hex.dataset.width = field.width
+        const hexValue = document.createElement('div')
+        hexValue.contentEditable = 'true'
+        hex.appendChild(hexValue)
+        trFieldsHex.appendChild(hex)
+
+        // field name
+        const name = document.createElement('th')
+        name.colSpan = field.width
+        if (field.color) {
+          name.style.backgroundColor = field.color
+        }
+        if (field.name[0] === '~') {
+          name.className = 'bitfield-overline'
+          name.textContent = field.name.slice(1)
+        } else {
+          name.textContent = field.name
+        }
+        if (field.comment) {
+          name.title = field.comment
+        }
+        trFieldsName.appendChild(name)
+
+        // prepare to draw enums
+        fieldsHaveEnums ||= !!field.enumTypes
+      }
+
+      // draw fields enum
+      const trFieldsEnum = this.#trFieldsEnum
+      trFieldsEnum.textContent = ''
+
+      if (fieldsHaveEnums) {
+        for (let i = 0; i < format.fields.length; i++) {
+          const field = format.fields[i]
+          const enums = document.createElement('td')
+          enums.colSpan = field.width
+          enums.dataset.index = field.index
+          enums.dataset.width = field.width
+          if (field.enums.size > 0) {
+            const select = document.createElement('select')
+            const option = document.createElement('option')
+            option.value = ''
+            select.appendChild(option)
+            field.enums.forEach((value, key) => {
+              const option = document.createElement('option')
+              option.value = value
+              option.textContent = '(0x' + value.toString(16) + ') ' + key
+              select.appendChild(option)
+            })
+            enums.appendChild(select)
+          }
+          trFieldsEnum.appendChild(enums)
+        }
+      }
+
+      this.#setValue()
+    }
   }
 
-  // manage saved fields
-  /** @type {HTMLInputElement} */
-  const inputFieldDesc = node.querySelector('.bitfield-field-desc')
-  kvStroageManage(
-    node.querySelector('.bitfield-field-select'),
-    options.storagePrefix + '-fields-saved',
-    node.querySelector('.bitfield-field-add'), () => {
-      if (!inputFieldDesc.value) {
-        inputFieldDesc.style.backgroundColor = options.colorWarning
-        return
-      }
-      const value = inputFieldDesc.value
-      const field =
-        !value.startsWith('#') && !value.startsWith('enum') &&
-        !value.startsWith('typedef') && Field.fromString(value)
-      if (!field) {
-        inputFieldDesc.style.backgroundColor = options.colorError
-        return
-      }
-      return [field.name, value]
-    },
-    node.querySelector('.bitfield-field-append'), value => {
-      let format = inputFormat.value
-      if (!format.endsWith('\n')) {
-        format += '\n'
-      }
-      format += value
-      inputFormat.value = format
-      drawFormat(inputFormat)
-    },
-    node.querySelector('.bitfield-field-delete'),
-    node.querySelector('.bitfield-field-clear'))
+  customElements.define('bitfield-table', BitfieldTable, {extends: 'table'})
 
 
-  container.textContent = ''
-  container.appendChild(node)
+  class BitfieldViewer extends HTMLElement {
+    static template = document.createElement('template')
+
+    static {
+      this.template.innerHTML = `<link rel="stylesheet" href="bitfield.css" />
+
+      <div class="bitfield-table-container">
+      <table is="bitfield-table" class="bitfield-table"></table></div>
+
+<div class="bitfield-values">
+  <div>
+    <label for="bitfield-value">
+      Input:
+      <input type="text" class="bitfield-input-value" name="value" />
+    </label>
+  </div>
+  <div>
+    Value: <code class="bitfield-output-value"></code>
+  </div>
+  <div>
+    <span>Default radix:</span>
+    <label>
+      <input type="radio" name="radix" value="2" /> 2
+    </label>
+    <label>
+      <input type="radio" name="radix" value="8" /> 8
+    </label>
+    <label>
+      <input type="radio" name="radix" value="10" /> 10
+    </label>
+    <label>
+      <input type="radio" name="radix" value="16" checked="checked" /> 16
+    </label>
+  </div>
+  <div>
+    <label>
+      <input type="checkbox" name="signed" /> Signed int
+    </label>
+    <span class="tooltip">?
+      <span class="tooltiptext">Uncheck to always show unsigned int</span>
+    </span>
+    <label for="bitfield-float">
+      <input type="checkbox" name="float" checked="checked" disabled="disabled" />
+      <span class="bitfield-float-label">IEEE float</span>
+    </label>
+    <span class="tooltip">?
+      <span class="tooltiptext">
+        Treat value as IEEE float, register must be exactly 32 or 64 bit long
+      </span>
+    </span>
+  </div>
+</div>`
+    }
+
+    root = this.attachShadow({mode: 'open'})
+    /**
+     * register width
+     */
+    #regWidth = 0
+    #radix = 16
+    #asSigned = false
+    #asFloat = false
+    /**
+     * register value
+     */
+    #value = 0n
+    #parseSuccess = false
+
+    constructor () {
+      super()
+
+      this.root.appendChild(this.constructor.template.content.cloneNode(true))
+
+      this.#table.addEventListener('valuechange', event => {
+        this.#setValue(event.detail, event.target)
+      })
+
+      const input = this.#input
+      input.value = localStorage.getItem(
+        (this.getAttribute('prefix') || 'bitfield') + '::value') || '0'
+      input.addEventListener('input', event => {
+        this.#readValue(event.target)
+        localStorage.setItem(
+          (this.getAttribute('prefix') || 'bitfield') + '::value',
+          event.target.value)
+      }, {passive: true})
+
+      // radix & signedness
+      this.#radix = Number(localStorage.getItem(
+        (this.getAttribute('prefix') || 'bitfield') + '::radix')) || 16
+      initRadioInputs(
+        this.root.querySelectorAll('input[name="radix"]'), event => {
+          this.#radix = parseInt(event.target.value)
+          localStorage.setItem(
+            (this.getAttribute('prefix') || 'bitfield') + '::radix',
+            event.target.value)
+          this.#drawOrReadValue(event.target)
+        }, this.#radix.toString())
+
+      const signed = this.#signed
+      signed.checked = !!localStorage.getItem(
+        (this.getAttribute('prefix') || 'bitfield') + '::signed')
+      this.#asSigned = signed.checked
+      signed.addEventListener('change', event => {
+        this.#asSigned = event.target.checked
+        localStorage.setItem(
+          (this.getAttribute('prefix') || 'bitfield') + '::signed',
+          event.target.checked ? '1' : '')
+        this.#drawValue(event.target)
+      }, {passive: true})
+
+      const float = this.#float
+      float.checked = !!localStorage.getItem(
+        (this.getAttribute('prefix') || 'bitfield') + '::float')
+      this.#asFloat = float.checked
+      float.addEventListener('change', event => {
+        this.#asFloat = event.target.checked
+        localStorage.setItem(
+          (this.getAttribute('prefix') || 'bitfield') + '::signed',
+          event.target.checked ? '1' : '')
+        this.#drawOrReadValue(event.target)
+      }, {passive: true})
+
+      this.#labelFloat.style.backgroundColor =
+        this.getAttribute('color-warning') || 'lightyellow'
+
+      this.#readValue(input)
+    }
+
+    static get observedAttributes () {
+      return ['color-warning', 'color-error']
+    }
+
+    /** @type {BitfieldTable} */
+    get #table () {
+      return this.root.querySelector('.bitfield-table')
+    }
+
+    /** @type {HTMLInputElement} */
+    get #input () {
+      return this.root.querySelector('.bitfield-input-value')
+    }
+
+    /** @type {HTMLElement} */
+    get #output () {
+      return this.root.querySelector('.bitfield-output-value')
+    }
+
+    /** @type {HTMLInputElement} */
+    get #signed () {
+      return this.root.querySelector('input[name="signed"]')
+    }
+
+    /** @type {HTMLInputElement} */
+    get #float () {
+      return this.root.querySelector('input[name="float"]')
+    }
+
+    /** @type {HTMLElement} */
+    get #labelFloat () {
+      return this.root.querySelector('.bitfield-float-label')
+    }
+
+    get value () {
+      return this.#value
+    }
+
+    set value (value) {
+      this.#setValue(value)
+    }
+
+    /**
+     * @param {bigint} value
+     * @param {HTMLElement} initiator
+     */
+    #setValue (value = this.#value, initiator = undefined) {
+      this.#value = value
+
+      const unsigned = value & ((1n << BigInt(this.#regWidth)) - 1n)
+      const val =
+        this.#asSigned && this.#regWidth > 0 &&
+          unsigned >= 1n << BigInt(this.#regWidth - 1) ?
+        unsigned - (1n << BigInt(this.#regWidth)) : unsigned
+
+      const table = this.#table
+      if (initiator !== table) {
+        table.value = val
+      }unsigned
+
+      const strValue = valueToString(val, this.#radix)
+
+      const input = this.#input
+      if (initiator !== input) {
+        input.value = strValue
+        localStorage.setItem(
+          (this.getAttribute('prefix') || 'bitfield') + '::value', strValue)
+      }
+
+      let str = strValue
+      if (this.#asFloat && (
+          this.#regWidth === 32 || this.#regWidth === 64)) {
+        const buf = new ArrayBuffer(this.#regWidth / 8)
+        let float
+        switch (this.#regWidth) {
+          case 32:
+            new Uint32Array(buf)[0] = Number(unsigned)
+            float = new Float32Array(buf)[0]
+            break
+          case 64:
+            new BigUint64Array(buf)[0] = unsigned
+            float = new Float64Array(buf)[0]
+            break
+        }
+        str += ', ' + float.toString()
+      }
+      this.#output.textContent = str + ' (0x' + val.toString(16) + ')'
+
+      if (initiator) {
+        this.dispatchEvent(new CustomEvent('valuechange', {detail: value}))
+      }
+      return value
+    }
+
+    /**
+     * @param {HTMLElement} initiator
+     */
+    #readValue (initiator = undefined) {
+      this.#parseSuccess = false
+
+      const input = this.#input
+      const strValue = input.value.trim()
+      if (!strValue) {
+        input.style.backgroundColor =
+          this.getAttribute('color-warning') || 'lightyellow'
+        return null
+      }
+
+      let value = null
+      try {
+        value = parseValue(strValue, this.#radix)
+      } catch (e) {
+        if (!(e instanceof SyntaxError)) {
+          throw e
+        }
+      }
+
+      if (value === null) {
+        if (this.#asFloat && (
+            this.#regWidth === 32 || this.#regWidth === 64)) {
+          const float = parseFloat(strValue)
+          if (!isNaN(float)) {
+            const buf = new ArrayBuffer(this.#regWidth / 8)
+            switch (this.#regWidth) {
+              case 32:
+                new Float32Array(buf)[0] = float
+                value = BigInt(new Int32Array(buf)[0])
+                break
+              case 64:
+                new Float64Array(buf)[0] = float
+                value = new BigInt64Array(buf)[0]
+                break
+            }
+          }
+        }
+
+        if (value === null) {
+          input.style.backgroundColor =
+            this.getAttribute('color-error') || 'lightpink'
+          return null
+        }
+      }
+
+      input.style.backgroundColor = ''
+      this.#parseSuccess = true
+
+      return this.#setValue(value, initiator)
+    }
+
+    /**
+     * @param {HTMLElement} initiator
+     */
+    #drawValue (initiator = undefined) {
+      return this.#parseSuccess ? this.#setValue() : null
+    }
+
+    /**
+     * @param {HTMLElement} initiator
+     */
+    #drawOrReadValue (initiator = undefined) {
+      return this.#parseSuccess ? this.#setValue() : this.#readValue(initiator)
+    }
+
+    attributeChangedCallback (name, oldValue, newValue) {
+      switch (name) {
+        case 'color-warning':
+          if (this.#labelFloat.style.backgroundColor) {
+            this.#labelFloat.style.backgroundColor = newValue
+          }
+          // fall through
+        case 'color-error':
+          this.#table.setAttribute(name, newValue)
+          break
+      }
+    }
+
+    clear () {
+      this.#regWidth = 0
+      this.#table.clear()
+    }
+
+    /**
+     * Draw struct table.
+     * @param {Format} format Format.
+     */
+    setFormat (format) {
+      this.#regWidth = format.width
+
+      if (this.#regWidth === 32 || this.#regWidth === 64) {
+        this.#labelFloat.style.backgroundColor = ''
+        this.#float.disabled = false
+      } else {
+        this.#labelFloat.style.backgroundColor =
+          this.getAttribute('color-warning') || 'lightyellow'
+        this.#float.disabled = true
+      }
+
+      this.#table.setFormat(format)
+      this.#readValue(this.#input)
+    }
+  }
+
+  customElements.define('bitfield-viewer', BitfieldViewer)
+
+
+  var Bitfield = class Bitfield {
+    /** @type {HTMLElement} */
+    root
+    options
+    /** @type {LocalMapStorage<string>} */
+    structs
+
+    /**
+     * @param {HTMLElement} root
+     * @param {Object} options
+     * @param {string} [options.storagePrefix] prefix to use for `LocalStorage`
+     * @param {string} [options.colorError] color to use for errors
+     * @param {string} [options.colorWarning] color to use for warnings
+     */
+    constructor (root, options = {}) {
+      this.root = root
+      this.options = options
+
+      options.storagePrefix ||= this.root.dataset.storagePrefix || 'bitfield'
+      options.colorError ||= this.root.dataset.colorError || 'lightpink'
+      options.colorWarning ||= this.root.dataset.colorWarning || 'lightyellow'
+
+      const input = this.#format
+      input.addEventListener('input', event => {
+        this.#setFormat()
+      }, {passive: true})
+      const oldFormat = localStorage.getItem(
+        this.options.storagePrefix + '::format')
+      if (oldFormat) {
+        this.#format.value = oldFormat
+      }
+      this.#setFormat()
+
+      // manage saved structs
+      this.structs = kvStroageManage(
+        this.root.querySelector('.bitfield-struct-select'),
+        this.options.storagePrefix + '::structs',
+        this.root.querySelector('.bitfield-struct-save'),
+        event => {
+          /** @type {HTMLInputElement} */
+          const target = event.target
+          if (target.value === '') {
+            target.style.backgroundColor = this.options.colorWarning
+            return null
+          }
+          return this.#getFormat() && [target.value, this.#format.value]
+        },
+        this.root.querySelector('.bitfield-struct-load'), value => {
+          this.format = value
+        },
+        this.root.querySelector('.bitfield-struct-delete'),
+        this.root.querySelector('.bitfield-struct-clear'))
+
+      this.root.querySelector('.bitfield-book-load')?.addEventListener(
+        'click', async event => {
+          const input = this.root.querySelector('.bitfield-book-input')
+          if (input === null) {
+            return
+          }
+          const reader = await readInputFile(input)
+          if (reader === null) {
+            return
+          }
+
+          const book = JSON.parse(reader.result)
+          if (!Array.isArray(book)) {
+            alert('It does not look like a valid book.')
+            return
+          }
+
+          this.structs.delayMode = true
+          for (let i = 0; i < book.length; i++) {
+            this.structs.set(book[i][0], book[i][1])
+          }
+          this.structs.delayMode = false
+          this.structs.store()
+
+          const select = this.root.querySelector('.bitfield-struct-select')
+          select.textContent = ''
+          for (const [key, value] of this.structs) {
+            const option = document.createElement('option')
+            option.value = key
+            option.textContent = key
+            select.appendChild(option)
+          }
+        }, {passive: true})
+    }
+
+    /** @type {BitfieldViewer} */
+    get #viewer () {
+      return this.root.querySelector('bitfield-viewer')
+    }
+
+    /** @type {HTMLInputElement | HTMLTextAreaElement} */
+    get #format () {
+      return this.root.querySelector('.bitfield-format')
+    }
+
+    get format () {
+      return this.#format.value
+    }
+
+    set format (value) {
+      this.#format.value = value
+      this.#setFormat()
+    }
+
+    #getFormat () {
+      const input = this.#format
+
+      const formatStr = input.value
+      if (formatStr === '') {
+        input.style.backgroundColor = ''
+        return null
+      }
+
+      let format
+      try {
+        format = Format.fromString(formatStr)
+      } catch (e) {
+        console.info('Parse error:', e)
+        input.style.backgroundColor = this.options.colorError
+        return null
+      }
+
+      if (format.isEmpty) {
+        input.style.backgroundColor = this.options.colorWarning
+        return null
+      }
+
+      input.style.backgroundColor = ''
+      return format
+    }
+
+    #setFormat () {
+      const format = this.#getFormat()
+      if (format !== null) {
+        localStorage.setItem(
+          this.options.storagePrefix + '::format', this.#format.value)
+        this.#viewer.setFormat(format)
+      }
+      return format
+    }
+  }
 }

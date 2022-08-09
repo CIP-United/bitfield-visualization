@@ -1,0 +1,245 @@
+:host(:not([hidden])) {
+  display: flex;
+  line-height: 1.5;
+  gap: 20px;
+}
+
+@media not (min-width: 480px) {
+  :host(:not([hidden])) {
+    flex-direction: column;
+  }
+}
+
+.manual-side-panel {
+  flex-shrink: 0;
+}
+
+@media (min-width: 480px) {
+  .manual-side-panel {
+    width: 20%;
+  }
+}
+
+.manual-side-panel > * {
+  display: block;
+  margin-top: 1.5em;
+  margin-bottom: 1.5em;
+}
+
+.manual-side-panel > :first-child {
+  margin-top: 0;
+}
+
+.manual-side-panel > :last-child {
+  margin-bottom: 0;
+}
+
+.manual-side-panel h1 {
+  margin: 0;
+  font-size: 1em;
+  font-weight: bold;
+}
+
+.manual-side-panel menu {
+  margin: 0;
+  padding: 0;
+}
+
+.manual-side-panel menu > li {
+  display: block;
+}
+
+.manual-side-panel label {
+  display: block;
+}
+
+.manual-categories > * {
+  margin-top: 1.5em;
+  margin-bottom: 1.5em;
+}
+
+.manual-categories > :first-child {
+  margin-top: 0;
+}
+
+.manual-categories > :last-child {
+  margin-bottom: 0;
+}
+
+.manual-categories > .manual-links:not(:first-child) {
+  margin-top: 3em;
+}
+
+.manual-category > * {
+  display: block;
+  margin-top: .0625em;
+  margin-bottom: .0625em;
+}
+
+.manual-links > * {
+  margin-top: .5em;
+  margin-bottom: .5em;
+}
+
+.manual-links a {
+  text-decoration: none;
+}
+
+.manual-main-panel {
+  flex-grow: 1;
+}
+
+.manual-search {
+  margin-top: .5em;
+  margin-bottom: .5em;
+  padding: .1875em .5625em;
+  border: .0625em solid lightgray;
+  border-radius: 1em;
+  width: calc(100% - 1.25em);
+  font-size: 100%;
+  line-height: 1.5;
+}
+
+.colored, .manual-category-colored > *, .manual-body > * {
+  margin-top: .0625em;
+  margin-bottom: .0625em;
+  border-left-style: solid;
+  border-left-width: .5em;
+  border-top-style: solid;
+  border-top-width: .0625em;
+  border-color: lightgray;
+  padding-top: .125em;
+  padding-left: .375em;
+}
+
+.manual-body > * {
+  transition: height .4s ease-in-out;
+  overflow-y: hidden;
+}
+
+.manual-body > * > summary {
+  display: block;
+  cursor: pointer;
+  margin-top: -.125em;
+  margin-left: -.375em;
+  padding-top: .125em;
+  padding-left: .375em;
+}
+
+.manual-page-signature {
+  float: right;
+  color: darkgray;
+  font-size: smaller;
+}
+
+.manual-page-content {
+  margin: .75rem;
+  font-size: smaller;
+}
+
+.manual-page-content > * > h1 {
+  margin: 0;
+  font-size: larger;
+  font-weight: bold;
+}
+
+.manual-page-content > * > div {
+  margin: .5rem;
+}
+
+.manual-page-content pre {
+  background-color: #f5f5f5;
+}
+
+/* Builtin tags */
+
+.manual-body .removed > summary {
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(0, 0, 0, .0625),
+    rgba(0, 0, 0, .0625) 0.5em,
+    rgba(0, 0, 0, .03125) 0.5em,
+    rgba(0, 0, 0, .03125) 1em
+  );
+}
+
+.dark-mode .manual-body .removed > summary {
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 255, 255, .0625),
+    rgba(255, 255, 255, .0625) 0.5em,
+    rgba(255, 255, 255, .03125) 0.5em,
+    rgba(255, 255, 255, .03125) 1em
+  );
+}
+
+.manual-body .deprecated > summary {
+  background-image: url(
+    "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' version='1.1' height='50px' width='120px'><text x='0' y='15' fill='lemonchiffon' font-size='20'>Deprecated</text></svg>"
+  );
+}
+
+.manual-body table {
+  border-collapse: collapse;
+}
+
+.manual-body table th, .manual-body table td {
+  border-style: solid;
+  border-width: 1px;
+}
+
+.manual-body table tbody > tr:first-child > * {
+  border-top-style: double;
+  border-top-width: 3px;
+}
+
+/* Bit structs */
+
+.manual-body .struct-controller {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.manual-body .struct {
+  min-width: 70%;
+  border-collapse: collapse;
+  text-align: center;
+  font-family: monospace;
+}
+
+.manual-body .struct th {
+  border-style: none;
+  font-weight: normal;
+}
+
+.manual-body .struct-index-range {
+  display: flex;
+  justify-content: space-between;
+}
+
+.manual-body .struct-names > * {
+  border-style: solid;
+  border-width: 1px 1px 0 1px;
+  border-top-style: solid !important;
+  border-top-width: 1px !important;
+}
+
+.manual-body .struct-name-overline {
+  text-decoration-line: overline;
+}
+
+.manual-body .struct-bits > * {
+  border-style: solid;
+  border-width: 0 1px 1px 1px;
+}
+
+/* Styles for external usage */
+
+.paragraph:not(:first-child) {
+  margin-block-start: 1em;
+}
+
+.paragraph:not(:last-child) {
+  margin-block-end: 1em;
+}

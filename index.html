@@ -1,13 +1,27 @@
 <!DOCTYPE html>
 
 <meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<link rel="preload" href="bitfield.css" as="style" />
+<link rel="preload" href="manual.css" as="style" />
+<link rel="stylesheet" href="index.css" />
 
 <title>Bitfield Visualization</title>
 
-<!--script-start-->
-<script async="async" src="bitfield.js"></script>
+<script async="async" src="amd-static.js"></script>
+<script async="async" data-module="d3" data-export="d3"
+  src="https://unpkg.com/d3-color/dist/d3-color.min.js"
+  crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script async="async" data-module="xss" data-export="filterXSS"
+  src="https://unpkg.com/xss/dist/xss.js"
+  crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script async="async" data-module="bitfield" data-export="Bitfield"
+  src="bitfield.js"></script>
+<script async="async" data-module="manual" data-export="ManualFormatter"
+  src="manual.js"></script>
+<script async="async" src="mips.js"></script>
 <script async="async" src="index.js"></script>
-<!--script-end-->
 
 <header>
   <style>
@@ -31,75 +45,13 @@
   </a>
 </header>
 
-<template id="bitfield-template">
-  <!--stylesheet-start-->
-  <link rel="stylesheet" href="bitfield.css" />
-  <!--stylesheet-end-->
+<noscript><p>This page requires JavaScript to be enabled.</p></noscript>
 
-  <table class="bitfield-table">
-    <thead>
-      <tr class="bitfield-bits-index"></tr>
-    </thead>
-    <tbody>
-      <tr class="bitfield-bits-value"></tr>
-      <tr class="bitfield-fields-hex"></tr>
-    </tbody>
-    <thead>
-      <tr class="bitfield-fields-name"></tr>
-    </thead>
-    <tbody>
-      <tr class="bitfield-fields-enum"></tr>
-    </tbody>
-  </table>
+<bitfield-viewer>Loading...</bitfield-viewer>
 
-  <p>Value: <code class="bitfield-value-output"></code></p>
-  <p>
-    <label for="bitfield-value">
-      Input:
-      <input type="text" class="bitfield-value" name="value" />
-    </label>
-  </p>
-  <p>
-    <span>Default radix:</span>
-    <label>
-      <input type="radio" name="radix" value="2" />
-      2
-    </label>
-    <label>
-      <input type="radio" name="radix" value="8" />
-      8
-    </label>
-    <label>
-      <input type="radio" name="radix" value="10" />
-      10
-    </label>
-    <label>
-      <input type="radio" name="radix" value="16" checked="checked" />
-      16
-    </label>
-  </p>
-  <p>
-    <label>
-      <input type="checkbox" name="signed" />
-      Signed int
-    </label>
-    <span class="tooltip">?
-      <span class="tooltiptext">Uncheck to always show unsigned int</span>
-    </span>
-    <label for="bitfield-float">
-      <input type="checkbox" name="float" />
-      <span class="bitfield-float-label">IEEE float</span>
-    </label>
-    <span class="tooltip">?
-      <span class="tooltiptext">
-        Treat value as IEEE float, must be exactly 16, 32, 64 or 96 bit long
-      </span>
-    </span>
-  </p>
-
-  <label>
-    <p>Format:</p>
-    <p><textarea class="bitfield-format" name="format" rows="8" cols="80">
+<label>
+  <p>Format:</p>
+  <p><textarea class="bitfield-format" name="format" rows="8">
 enum Exponent {
   EXPONENT_SUBNORMAL
   EXPONENT_SPECIAL = 0xff
@@ -108,71 +60,41 @@ enum Exponent {
 sign:1:lightblue
 exponent:8:lightgreen:Exponent
 fraction:23:lightpink</textarea></p>
+</label>
+
+<p>
+  <label>
+    Select saved struct:
+    <select class="bitfield-struct-select" name="saved" alt="Select saved struct"></select>
   </label>
+  <button class="bitfield-struct-load" title="Load struct" type="button">
+    <span>⤵️</span>
+    <span class="hideable">Load</span>
+  </button>
+  <button class="bitfield-struct-delete" title="Delete struct" type="button">
+    <span>❌</span>
+    <span class="hideable">Delete</span>
+  </button>
+  <button class="bitfield-struct-clear" title="Clear all saved structs" type="button">
+    <span>🧹</span>
+    <span class="hideable">Clear</span>
+  </button>
+</p>
+<p>
+  <input type="text" class="bitfield-struct-name" name="struct-name"
+    placeholder="Enter struct name..." />
+  <button class="bitfield-struct-save" title="Save struct" type="button">
+    <span>💾</span>
+    <span class="hideable">Save</span>
+  </button>
+</p>
 
-  <p>
-    <label>
-      Select saved struct:
-      <select class="bitfield-struct-select" name="saved" alt="Select saved struct"></select>
-    </label>
-    <button class="bitfield-struct-load" title="Load struct" type="button">
-      <span>⤵️</span>
-      <span class="hideable">Load</span>
-    </button>
-    <button class="bitfield-struct-delete" title="Delete struct" type="button">
-      <span>❌</span>
-      <span class="hideable">Delete</span>
-    </button>
-    <button class="bitfield-struct-clear" title="Clear all saved structs" type="button">
-      <span>🧹</span>
-      <span class="hideable">Clear</span>
-    </button>
-  </p>
-  <p>
-    <input type="text" class="bitfield-struct-name" name="struct-name"
-      placeholder="Enter struct name..." />
-    <button class="bitfield-struct-save" title="Save struct" type="button">
-      <span>💾</span>
-      <span class="hideable">Save</span>
-    </button>
-  </p>
+<p hidden="hidden">
+  <input type="file" class="bitfield-book-input" name="book" />
+  <button class="bitfield-book-load" title="Load book" type="button">
+    <span>📔</span>
+    <span class="hideable">Load book</span>
+  </button>
+</p>
 
-  <p>
-    <label>
-      Select saved field:
-      <select class="bitfield-field-select" name="saved" alt="Select saved field"></select>
-    </label>
-    <button class="bitfield-field-append" title="Append field" type="button">
-      <span>⬆️</span>
-      <span class="hideable">Append</span>
-    </button>
-    <button class="bitfield-field-delete" title="Delete field" type="button">
-      <span>❌</span>
-      <span class="hideable">Delete</span>
-    </button>
-    <button class="bitfield-field-clear" title="Clear all saved fields" type="button">
-      <span>🧹</span>
-      <span class="hideable">Clear</span>
-    </button>
-  </p>
-  <p>
-    <input type="text" class="bitfield-field-desc" name="field-desc"
-      placeholder="Enter field desc to save..." />
-    <button class="bitfield-field-add" title="Add field" type="button">
-      <span>➕</span>
-      <span class="hideable">Add</span>
-    </button>
-  </p>
-  <p>
-    <input type="file" class="bitfield-book-input" name="book" />
-    <button class="bitfield-book-load" title="Load book" type="button">
-      <span>📔</span>
-      <span class="hideable">Load book</span>
-    </button>
-  </p>
-</template>
-
-<main class="bitfield">
-  <noscript><p>This page requires JavaScript to be enabled.</p></noscript>
-  <p>Loading...</p>
-</main>
+<manual-viewer>Loading...</manual-viewer>

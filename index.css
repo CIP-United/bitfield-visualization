@@ -1,0 +1,55 @@
+body {
+  --background-color: rgba(0, 0, 0, 0);
+  --fill: white;
+  --color: black;
+  margin: .5em;
+  background-color: var(--background-color);
+  color: var(--color);
+}
+
+.dark-mode {
+  --background-color: rgba(0, 0, 0, .75);
+  --fill: #404040;
+  --color: white;
+}
+
+@media not (min-width: 480px) {
+  body {
+    padding: 0;
+  }
+}
+
+@media (min-width: 480px) {
+  body {
+    padding: 0;
+  }
+}
+
+@media (min-width: 768px) {
+  body {
+    padding: 0;
+  }
+}
+
+@media (min-width: 992px) {
+  body {
+    padding: 0;
+  }
+}
+
+@media (min-width: 1200px) {
+  body {
+    padding: 0 5%;
+  }
+}
+
+@media (min-width: 1650px) {
+  body {
+    padding: 0 5%;
+  }
+}
+
+.bitfield-format {
+  width: 80ex;
+  max-width: 100%;
+}

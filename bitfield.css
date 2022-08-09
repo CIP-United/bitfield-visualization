@@ -1,16 +1,11 @@
-body {
-  --background-color: rgba(0, 0, 0, 0);
-  --fill: white;
-  --color: black;
-  margin: .5em;
-  background-color: var(--background-color);
-  color: var(--color);
+:host(:not([hidden])) {
+  display: block;
 }
 
-.dark-mode {
-  --background-color: rgba(0, 0, 0, .75);
-  --fill: #404040;
-  --color: white;
+.bitfield-table-container {
+  padding-bottom: 1px;
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 .bitfield-table {
@@ -20,7 +15,7 @@ body {
   font-family: monospace,monospace;
 }
 
-.bitfield-table thead, .bitfield-table th {
+.bitfield-table th {
   background-color: #eaecf0;
 }
 
@@ -47,8 +42,38 @@ body {
   );
 }
 
+.bitfield-fields-name [title]::after {
+  content: "*";
+  font-size: 75%;
+  position: relative;
+  top: -0.5em;
+}
+
+.bitfield-overline {
+  text-decoration-line: overline;
+  text-decoration-thickness: .1em;
+}
+
 .bitfield-fields-enum td {
   text-align: right;
+}
+
+.bitfield-values {
+  margin-block-start: 1em;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1em;
+}
+
+@media not (min-width: 480px) {
+  .bitfield-values {
+    flex-direction: column;
+  }
+}
+
+.bitfield-values > * {
+  flex-grow: 1;
+  flex-basis: calc(50% - 1em);
 }
 
 .tooltip {

@@ -1,6 +1,13 @@
 'use strict'
 
-{
+;(function (id, dependencies, factory) {
+  if (typeof define === 'function') {
+    define(id, dependencies, factory)
+  } else {
+    (((globalThis.require ??= {}).options ??= {}).defers ??= []).push(
+      [id, dependencies, factory])
+  }
+})(['bitfield'], function (Bitfield) {
   const bitfieldPreload = [
     [
       "IEEE754 single-precision",
@@ -12,35 +19,65 @@
     ],
   ]
 
-  if (localStorage.getItem('bitfield-structs-saved') === null) {
+  if (localStorage.getItem('bitfield::structs') === null) {
     localStorage.setItem(
-      'bitfield-structs-saved', JSON.stringify(bitfieldPreload))
-    localStorage.setItem('bitfield-float', '1')
+      'bitfield::structs', JSON.stringify(bitfieldPreload))
+    localStorage.setItem('bitfield::float', '1')
   }
 
+  function main () {
+    document.removeEventListener('DOMContentLoaded', main)
+
+    const bitfield = new Bitfield(document.body)
+
+    const manual = document.querySelector('manual-viewer')
+    manual.addEventListener('choose', event => {
+      bitfield.format = event.detail.map(x => x[1] + ':' + x[0]).join('\n')
+    })
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', main)
+  } else {
+    main()
+  }
+})
+
+
+{
   /**
-   * @param {Event} event
-   * @returns {boolean}
+   * @param {HTMLInputElement} input
+   * @param {string} storageKeyName
+   * @param {string} className
    */
-  function main (event = undefined) {
-    if ([typeof bitfield].includes('undefined')) {
-      return false
-    }
-    if (event) {
-      Array.prototype.forEach.call(
-        document.querySelectorAll('script'),
-        script => script.removeEventListener('load', main))
-    }
+  function setupDarkMode (input, storageKeyName, className) {
+    input.addEventListener('change', function (event) {
+      if (event.target.checked) {
+        localStorage.setItem(storageKeyName, '1')
+      } else {
+        localStorage.removeItem(storageKeyName)
+      }
+      document.body.classList.toggle(className)
+    })
 
-    Array.prototype.forEach.call(
-      document.querySelectorAll('.bitfield'), x => bitfield(x))
-      //x => bitfield(x, {preload: bitfieldPreload}))
-    return true
+    if (localStorage.getItem(storageKeyName)) {
+      input.checked = true
+      document.body.classList.add(className)
+    }
   }
 
-  if (!main()) {
-    Array.prototype.forEach.call(
-      document.querySelectorAll('script'),
-      script => script.addEventListener('load', main))
+  function main () {
+    document.removeEventListener('DOMContentLoaded', main)
+
+    const input = document.querySelector('input[name="theme"][value="dark"]')
+    if (input !== null) {
+      setupDarkMode(input, 'bitfield::dark', 'dark-mode')
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', main)
+  } else {
+    main()
   }
 }
