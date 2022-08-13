@@ -143,8 +143,17 @@
   font-weight: bold;
 }
 
-.manual-page-content > * > div {
-  margin: .5rem;
+.manual-page-content > * > :not(:first-child) {
+  margin-left: .5rem;
+  margin-right: .5rem;
+}
+
+.manual-page-content > :not(:first-child) {
+  margin-block-start: 1rem;
+}
+
+.manual-page-content > :not(:last-child) {
+  margin-block-end: 1rem;
 }
 
 .manual-page-content pre {
@@ -179,27 +188,7 @@
   );
 }
 
-.manual-body table {
-  border-collapse: collapse;
-}
-
-.manual-body table th, .manual-body table td {
-  border-style: solid;
-  border-width: 1px;
-}
-
-.manual-body table tbody > tr:first-child > * {
-  border-top-style: double;
-  border-top-width: 3px;
-}
-
 /* Bit structs */
-
-.manual-body .struct-controller {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
 
 .manual-body .struct {
   min-width: 70%;
@@ -213,16 +202,9 @@
   font-weight: normal;
 }
 
-.manual-body .struct-index-range {
-  display: flex;
-  justify-content: space-between;
-}
-
 .manual-body .struct-names > * {
   border-style: solid;
   border-width: 1px 1px 0 1px;
-  border-top-style: solid !important;
-  border-top-width: 1px !important;
 }
 
 .manual-body .struct-name-overline {
@@ -236,10 +218,49 @@
 
 /* Styles for external usage */
 
+:is(.manual-body table:not(.no-default-style), .table-border-collapse) {
+  border-collapse: collapse;
+}
+
+:is(.manual-body table:not(.no-default-style), .table-bordered) > * > tr > :is(th, td),
+.bordered
+{
+  border-style: solid;
+  border-width: 1px;
+}
+
+:is(.manual-body table:not(.no-default-style), .table-bordered) > tbody > tr:first-child > * {
+  border-top-style: double;
+  border-top-width: 3px;
+}
+
+:is(.manual-body table:not(.no-default-style), .table-nonempty) > * > tr > :is(th, td):empty::before {
+  content: ".";
+  visibility: hidden;
+}
+
+.scattered {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .paragraph:not(:first-child) {
   margin-block-start: 1em;
 }
 
 .paragraph:not(:last-child) {
   margin-block-end: 1em;
+}
+
+.center {
+  text-align: center;
+}
+
+.start {
+  text-align: start;
+}
+
+.end {
+  text-align: end;
 }

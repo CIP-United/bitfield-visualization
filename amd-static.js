@@ -16,6 +16,22 @@
    * @return {any | Promise} Module or promise.
    */
 
+  /**
+   * @template T
+   * @return {Promise<T>}
+   */
+  function externalPromise () {
+    let promiseResolve
+    let promiseReject
+    const promise = new Promise((resolve, reject) => {
+      promiseResolve = resolve
+      promiseReject = reject
+    })
+    promise.resolve = promiseResolve
+    promise.reject = promiseReject
+    return promise
+  }
+
 
   /**
    * @extends {Map<string, Promise>}
@@ -99,15 +115,7 @@
       if (promise_ !== undefined) {
         return promise_
       }
-
-      let promiseResolve
-      let promiseReject
-      const promise = new Promise(function (resolve, reject) {
-        promiseResolve = resolve
-        promiseReject = reject
-      })
-      promise.resolve = promiseResolve
-      promise.reject = promiseReject
+      const promise = externalPromise()
       this.set(id, promise)
       return promise
     }

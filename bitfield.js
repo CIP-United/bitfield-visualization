@@ -1742,7 +1742,7 @@
     }
 
     /** @type {BitfieldViewer} */
-    get #viewer () {
+    get viewer () {
       return this.root.querySelector('bitfield-viewer')
     }
 
@@ -1792,7 +1792,7 @@
       if (format !== null) {
         localStorage.setItem(
           this.options.storagePrefix + '::format', this.#format.value)
-        this.#viewer.setFormat(format)
+        this.viewer.setFormat(format)
       }
       return format
     }

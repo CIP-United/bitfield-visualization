@@ -1,196 +1,6 @@
 'use strict'
 
-/**
- * @typedef ManualPageMetadata
- * @property {string} _title page title
- * @property {string} [_id] page ID
- * @property {string} [_signature] short description of the page
- * @property {string[]} [_tags] tags for the page
- * @property {string} [_keywords] additional search keywords
- */
-
-/**
- * @typedef {ManualPageMetadata & {[sectionName: string]: string}} ManualPage
- */
-
-/**
- * @typedef Manual
- * @property {ManualPage[]} body manual body
- * @property {{[categoryName: string]: [string, string, string?][]}} [categories] list of categories of tags
- * @property {string} [colored] category to be colored
- * @property {[string, string][]} [links] links to be shown at the bottom of categories
- * @property {string} [placeholder] search box placeholder
- * @property {string[]} [radios] categories to be shown as radios
- * @property {string} [style] CSS styles to be applied to the page
- * @property {{[formatterName: string]: string}} [formatters] format functions (in string)
- */
-
 {
-  /**
-   * @type {{[ns: string]: {
-   *  [formatter: string]: (str: any) => any,
-   *  stylesheet?: string,
-   * }}}
-   */
-  var ManualFormatter
-  (ManualFormatter ??= {}).default = {
-    escape (str) {
-      return str.toString()
-        .replaceAll('&', '&amp;').replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;').replaceAll('"', '&quot;')
-        .replaceAll("'", '&#039;')
-    },
-
-    br (str) {
-      return typeof str !== 'string' ? str : str.replaceAll('\n', '<br />')
-    },
-
-    split (str) {
-      return typeof str !== 'string' ? str : str.split('\n')
-    },
-
-    code (str) {
-      return '<code>' + str + '</code>'
-    },
-
-    p (str) {
-      return !Array.isArray(str) ? str :
-        '<div class="paragraph">' + str.join('</div><div class="paragraph">') +
-        '</div>'
-    },
-
-    pre (str) {
-      return '<pre>' + str + '</pre>'
-    },
-
-    /**
-     * @param {[number, string, (string | number)?][]} struct
-     * @param {string} caption
-     * @returns {string}
-     */
-    struct (struct, caption = '') {
-      if (!Array.isArray(struct)) {
-        return struct
-      }
-
-      let length = 0
-      /** @type {number[]} */
-      const fieldIndexs = new Array(struct.length)
-      for (let i = 0; i < struct.length; i++) {
-        const [size, name] = struct[i]
-        fieldIndexs[i] = length
-        if (size <= 0) {
-          console.warn(`Invalid size in struct member ${name}: ${size}`)
-        } else {
-          length += size
-        }
-      }
-
-      const table = ['<div class="struct-controller paragraph"><table class="struct">']
-
-      if (caption) {
-        table.push('<caption>')
-        table.push(caption)
-        table.push('</caption>')
-      }
-
-      table.push('<thead><tr>')
-      for (let i = 0; i < fieldIndexs.length; i++) {
-        fieldIndexs[i] = length - fieldIndexs[i] - 1
-        const [size] = struct[i]
-        if (size <= 0) {
-          continue
-        }
-        table.push('<th>')
-        if (size === 1) {
-          table.push(fieldIndexs[i].toString())
-        } else {
-          table.push('<div class="struct-index-range"><div>')
-          table.push(fieldIndexs[i].toString())
-          table.push('</div><div>')
-          table.push((fieldIndexs[i] + 1 - size).toString())
-          table.push('</div></div>')
-        }
-        table.push('</th>')
-      }
-
-      table.push('</tr></thead><tbody><tr class="struct-names">')
-      for (let i = 0; i < struct.length; i++) {
-        const [size, name] = struct[i]
-        if (size <= 0) {
-          continue
-        }
-        table.push('<td style="width: ')
-        table.push((size / length * 100).toString())
-        if (name[0] === '~') {
-          table.push('%;" class="struct-name-overline">')
-          table.push(name.slice(1))
-        } else {
-          table.push('%;">')
-          table.push(name)
-        }
-        table.push('</td>')
-      }
-
-      table.push('</tr><tr class="struct-bits">')
-      for (let i = 0; i < struct.length; i++) {
-        const [size, name, value] = struct[i]
-        if (size <= 0) {
-          continue
-        }
-        table.push('<td')
-        if (typeof value === 'number') {
-          table.push(' title="')
-          table.push(value.toString())
-          table.push('">')
-          table.push(value.toString(2).padStart(size, '0'))
-        } else {
-          table.push('>')
-          table.push(value || '&nbsp;')
-        }
-        table.push('</td>')
-      }
-
-      table.push('</tr><tfoot><tr>')
-      for (let i = 0; i < struct.length; i++) {
-        const [size] = struct[i]
-        if (size <= 0) {
-          continue
-        }
-        table.push('<th>')
-        table.push(size.toString())
-        table.push('</th>')
-      }
-
-      table.push('</tr></tfoot></table><button type="button" data-struct="')
-      table.push(ManualFormatter.default.escape(JSON.stringify(struct)))
-      table.push('">Use</button></div>')
-
-      return table.join('')
-    },
-
-    /**
-     * @param {{[caption: string]: [number, string, (string | number)?][]}} structs
-     * @returns {string}
-     */
-    structs (structs) {
-      if (typeof structs !== 'object') {
-        return structs
-      }
-
-      /** @type {string[]} */
-      const tables = []
-      for (const caption in structs) {
-        if (structs.hasOwnProperty(caption)) {
-          tables.push(ManualFormatter.default.struct(
-            structs[caption], caption[0] === '_' ? '' : caption))
-        }
-      }
-      return tables.join('')
-    },
-  }
-
-
   /**
    * @param {string} str
    * @returns {boolean}
@@ -204,10 +14,8 @@
    * @param {string} str
    * @returns {string}
    */
-  function property2title (str) {
-    let title =
-      str.charAt(0).toUpperCase() + str.slice(1).replace(/([A-Z])/g, ' $1')
-    return title.replaceAll('_', ' ')
+  function makeName (str) {
+    return str.replace(/[,= ]/g, '')
   }
 
 
@@ -312,6 +120,34 @@
 
 
   /**
+   * @param {Element} node
+   * @param {{[tagName: string]: string[]}} whitelist
+   */
+  function filterNode (node, whitelist) {
+    const tagName = node.tagName.toLowerCase()
+
+    if (!(tagName in whitelist)) {
+      node.remove()
+      return
+    }
+
+    const attrs = Array.from(node.attributes)
+    for (let i = 0; i < attrs.length; i++) {
+      const name = attrs[i].name
+      if (!name.startsWith('data-') && !whitelist._.includes(name) &&
+          !whitelist[tagName].includes(name)) {
+        node.removeAttribute(name)
+      }
+    }
+
+    const children = Array.from(node.children)
+    for (let i = 0; i < children.length; i++) {
+      filterNode(children[i], whitelist)
+    }
+  }
+
+
+  /**
    * Update URL search parameters, treating original value as comma-separated
    * set.
    * @param {URLSearchParams} params URL search parameters.
@@ -359,6 +195,7 @@
 
   /**
    * @param {HTMLDetailsElement} target
+   * @returns {boolean}
    */
   function detailAnimate (target) {
     if (!target.dataset.animation) {
@@ -394,6 +231,7 @@
       target.dataset.closing = '1'
       target.style.height =
         target.firstElementChild.getBoundingClientRect().height + 'px'
+      return false
     } else {
       // about to open
       if (target.dataset.closing) {
@@ -402,6 +240,7 @@
       target.style.height =
         target.firstElementChild.getBoundingClientRect().height +
         target.lastElementChild.getBoundingClientRect().height + 'px'
+      return true
     }
   }
 
@@ -412,6 +251,7 @@
     static {
       this.template.innerHTML = `<link rel="stylesheet" href="manual.css" />
 <style class="manual-filter"></style>
+<style class="manual-filter-search"></style>
 
 <nav class="manual-side-panel">
   <div class="manual-categories"></div>
@@ -422,31 +262,108 @@
       Trust the file (Arbitrary code execution!!!)
     </label>
   </form>
-  <button class="manual-collapse-all" type="button">Close all</button>
+  <button class="manual-collapse-all" type="button">Collapse all</button>
 </nav>
 
 <div class="manual-main-panel">
   <input class="manual-search" type="text" autocomplete="off"
-    placeholder="Search instructions or descriptions..." />
+    placeholder="Search title or keywords..." />
 
   <main class="manual-body"></main>
 </div>`
     }
 
-    static xssOptions = {
-      /** @type {{[x: string]: string[]}} */
-      whiteList: null,
-
-      /**
-       * @param {string} tag
-       * @param {string} name
-       * @param {string} value
-       */
-      onIgnoreTagAttr (tag, name, value) {
-        if (name.startsWith('data-')) {
-          return name + '="' + filterXSS.escapeAttrValue(value) + '"'
-        }
-      },
+    /** @type {{[tagName: string]: string[]}} */
+    static whitelist = {
+      _: ['id', 'class', 'style'],
+      a: ['target', 'href', 'title'],
+      abbr: ['title'],
+      address: [],
+      area: ['shape', 'coords', 'href', 'alt'],
+      article: [],
+      aside: [],
+      audio: [
+        'autoplay',
+        'controls',
+        'crossorigin',
+        'loop',
+        'muted',
+        'preload',
+        'src',
+      ],
+      b: [],
+      bdi: ['dir'],
+      bdo: ['dir'],
+      big: [],
+      blockquote: ['cite'],
+      br: [],
+      button: ['type'],
+      caption: [],
+      center: [],
+      cite: [],
+      code: [],
+      col: ['align', 'valign', 'span', 'width'],
+      colgroup: ['align', 'valign', 'span', 'width'],
+      dd: [],
+      del: ['datetime'],
+      details: ['open'],
+      div: [],
+      dl: [],
+      dt: [],
+      em: [],
+      figcaption: [],
+      figure: [],
+      font: ['color', 'size', 'face'],
+      footer: [],
+      h1: [],
+      h2: [],
+      h3: [],
+      h4: [],
+      h5: [],
+      h6: [],
+      header: [],
+      hr: [],
+      i: [],
+      img: ['src', 'alt', 'title', 'width', 'height'],
+      ins: ['datetime'],
+      li: [],
+      mark: [],
+      nav: [],
+      ol: [],
+      p: [],
+      pre: [],
+      s: [],
+      section: [],
+      small: [],
+      span: [],
+      sub: [],
+      summary: [],
+      sup: [],
+      strong: [],
+      strike: [],
+      table: ['width', 'border', 'align', 'valign'],
+      tbody: ['align', 'valign'],
+      td: ['width', 'rowspan', 'colspan', 'align', 'valign', 'title'],
+      tfoot: ['align', 'valign'],
+      th: ['width', 'rowspan', 'colspan', 'align', 'valign', 'title'],
+      thead: ['align', 'valign'],
+      tr: ['rowspan', 'align', 'valign'],
+      tt: [],
+      u: [],
+      ul: [],
+      video: [
+        'autoplay',
+        'controls',
+        'crossorigin',
+        'loop',
+        'muted',
+        'playsinline',
+        'poster',
+        'preload',
+        'src',
+        'height',
+        'width',
+      ],
     }
 
     root = this.attachShadow({mode: 'open'})
@@ -470,7 +387,7 @@
 
         /** @type {HTMLElement} */
         this.load(reader.result, {
-          xss: form.elements['trust']?.checked || undefined})
+          trusted: form.elements['trust']?.checked || undefined})
       }, {passive: true})
 
       /** @type {HTMLInputElement} */
@@ -488,11 +405,11 @@
       })
 
       this.#search.addEventListener('input', event => {
+        this.#doSearch()
         this.dispatchEvent(new CustomEvent('paramchange', {detail: {
           type: 'search',
           value: event.target.value,
         }}))
-        this.#doSearch()
       }, {passive: true})
 
       const categories = this.#categories
@@ -525,6 +442,7 @@
           event.preventDefault()
         }
 
+        this.#doFilter()
         this.dispatchEvent(new CustomEvent('paramchange', {detail: {
           type: 'category',
           value: target.value,
@@ -532,8 +450,6 @@
           name: target.name,
           exclusive: target.type === 'radio',
         }}))
-
-        this.#doFilter()
       })
 
       // change category buttons
@@ -544,6 +460,7 @@
           return
         }
 
+        this.#doFilter()
         this.dispatchEvent(new CustomEvent('paramchange', {detail: {
           type: 'category',
           value: target.value,
@@ -551,14 +468,11 @@
           name: target.name,
           exclusive: target.type === 'radio',
         }}))
-
-        this.#doFilter()
       }, {passive: true})
 
       this.root.querySelector('.manual-collapse-all').addEventListener(
         'click', event => {
           this.collapseAll()
-
           this.dispatchEvent(new CustomEvent('paramchange', {detail: {
             type: 'page',
             value: null,
@@ -570,53 +484,63 @@
 
       // details animation
       body.addEventListener('click', event => {
-        /** @type {HTMLDetailsElement} */
-        const target = event.target.closest('summary')?.parentElement
-        if (!target) {
+        /** @type {HTMLDetailsElement?} */
+        const summary = event.target.closest('summary')
+        if (summary === null) {
+          return
+        }
+        const target = summary.parentElement
+        if (target === null) {
           return
         }
 
-        detailAnimate(target)
-
-        this.dispatchEvent(new CustomEvent('paramchange', {detail: {
-          type: 'page',
-          value: target.id,
-          status: !target.dataset.closing,
-        }}))
-
+        const open = detailAnimate(target)
         // keep it open to display the content
         if (target.open) {
           event.preventDefault()
         }
+        this.dispatchEvent(new CustomEvent('paramchange', {detail: {
+          type: 'page',
+          value: target.id,
+          status: open,
+        }}))
       })
 
+      // select struct format
       body.addEventListener('click', event => {
-        /** @type {HTMLButtonElement} */
-        const target = event.target
-        if (target.tagName !== 'BUTTON' || !target.dataset.struct) {
+        /** @type {HTMLButtonElement?} */
+        const target = event.target.closest('button')
+        if (target === null || !target.dataset.struct) {
           return
         }
-        this.dispatchEvent(new CustomEvent(
-          'choose', {detail: JSON.parse(target.dataset.struct)}))
+        this.dispatchEvent(new CustomEvent('choose', {
+          detail: new DOMParser().parseFromString(
+            target.dataset.struct.trim(), 'text/xml').firstElementChild
+        }))
       }, {passive: true})
 
+      // intercept page anchor
       body.addEventListener('click', event => {
-        /** @type {HTMLAnchorElement} */
-        const target = event.target
-        if (target.tagName !== 'A') {
+        /** @type {HTMLAnchorElement?} */
+        const target = event.target.closest('a')
+        if (target === null) {
           return
         }
-        const href = target.getAttribute('href')
-        if (href === null || href[0] !== '#') {
+        const href = target.getAttribute('href')?.trim()
+        if (!href || href[0] !== '#') {
           return
         }
         event.preventDefault()
-        const page = this.#body.querySelector(href)
+
+        const anchor = this.#body.querySelector(href)
+        if (anchor === null) {
+          return
+        }
+        const page = anchor.closest('details')
         if (page === null) {
           return
         }
 
-        const inclusive = !!target.closest(href)
         if (!page.open) {
           page.open = true
           this.dispatchEvent(new CustomEvent('paramchange', {detail: {
@@ -625,8 +549,8 @@
             status: true,
           }}))
         }
-        if (!inclusive) {
-          page.scrollIntoView()
+        if (target.closest(href) === null) {
+          anchor.scrollIntoView()
         }
       })
     }
@@ -634,6 +558,11 @@
     /** @type {HTMLStyleElement} */
     get #filter () {
       return this.root.querySelector('.manual-filter')
+    }
+
+    /** @type {HTMLStyleElement} */
+    get #filterSearch () {
+      return this.root.querySelector('.manual-filter-search')
     }
 
     /** @type {HTMLElement} */
@@ -682,38 +611,34 @@
       }
     }
 
-    #doSearch (str = this.#search.value.toLowerCase()) {
-      const pages = this.pages
-      for (let i = 0; i < pages.length; i++) {
-        const page = pages[i]
-        page.hidden = str && !page.dataset.search.includes(str)
-        if (page.open) {
-          page.open = false
-          if (page.style.height) {
-            page.style.height = ''
-          }
-        }
-      }
+    #doSearch (str = this.#search.value) {
+      const s = str.toLowerCase().trim().replace(/\s+/g, ' ')
+      this.#filterSearch.textContent = s &&
+        '.manual-body > :not([data-search*="' + s +'"]) { display: none; }'
     }
 
     #doFilter () {
-      this.collapseAll()
+      /** @type {string[][]} */
+      const sat = []
 
-      /** @type {NodeListOf<HTMLInputElement>} */
-      const inputs = this.#categories.querySelectorAll('input:checked')
-      if (inputs.length === 0) {
-        // no tag selected; show all
-        this.#filter.textContent = ''
-        return
+      const categories = this.#categories.children
+      for (let i = 0; i < categories.length; i++) {
+        /** @type {NodeListOf<HTMLInputElement>} */
+        const inputs = categories[i].querySelectorAll('input:checked')
+        if (inputs.length > 0) {
+          /** @type {string[]} */
+          const tags = new Array(inputs.length)
+          for (let j = 0; j < inputs.length; j++) {
+            tags[j] = inputs[j].value
+          }
+          sat.push(tags)
+        }
       }
 
-      /** @type {string[]} */
-      const tags = []
-      for (const input of inputs) {
-        tags.push(input.value)
-      }
-      this.#filter.textContent =
-        `.manual-body > :not(.${tags.join('.')}) {display: none;}`
+      this.#filter.textContent = sat.length === 0 ? '' :
+        '.manual-body > :not(:is(' +
+        sat.map(tags => '.' + tags.join(', .')).join('):is(') +
+        ')) { display: none; }'
     }
 
     setParams (params = new URLSearchParams(location.hash.slice(1))) {
@@ -763,10 +688,11 @@
       this.#categories.textContent = ''
 
       const search = this.#search
-      if (!search.dataset.placeholder) {
+      if (!('placeholder' in search.dataset)) {
         search.dataset.placeholder = search.placeholder
+      } else {
+        search.placeholder = search.dataset.placeholder
       }
-      search.placeholder = search.dataset.placeholder
       search.value = ''
 
       this.#body.textContent = ''
@@ -779,244 +705,200 @@
 
     /**
      * @typedef ManualViewRenderOptions
-     * @property {string[]} [ignoredTopics]
-     * @property {any} [xss]
+     * @property {boolean | (node: Element) => void} [trusted]
      */
 
     /**
-     * @param {Manual} manual
+     * @param {Element} manual
      * @param {ManualViewRenderOptions} options
      * @param {string[]?} ignoredTopics
      */
     async render (manual, options = {}) {
-      const trusted = options.xss === true
-      if (!trusted && typeof filterXSS === 'undefined') {
-        await require(['xss'])
-      }
-      if (!trusted && !options.xss && !this.constructor.xssOptions.whiteList) {
-        const whiteList = filterXSS.getDefaultWhiteList()
-        whiteList.button = ['type']
-        whiteList.td.push('title')
-        for (const prop in whiteList) {
-          whiteList[prop].push('class', 'style')
+      let manualObj = manual
+
+      const xsls = manualObj.querySelectorAll(':scope > stylesheet')
+      for (let i = 0; i < xsls.length; i++) {
+        const xsltProcessor = new XSLTProcessor
+        xsltProcessor.importStylesheet(xsls[0])
+        const doc = xsltProcessor.transformToDocument(manualObj)
+        if (!(doc instanceof XMLDocument)) {
+          throw new Error('Output method of embedded XSL must be XML')
         }
-        this.constructor.xssOptions.whiteList = whiteList
+        manualObj = doc.firstElementChild
+        if (manualObj === null) {
+          throw new Error('Invalid embedded XSL')
+        }
       }
-      const xss = trusted ? null :
-        new filterXSS.FilterXSS(options.xss ?? this.constructor.xssOptions)
 
+      // load styles
+      const styleTags = document.createElement('style')
+      this.root.appendChild(styleTags)
 
-      /** search **/
-      const search = this.#search
+      const styleObjs = manualObj.querySelectorAll(':scope > style')
+      for (let i = 0; i < styleObjs.length; i++) {
+        const style = document.createElement('style')
+        //style.textContent = !options.css ? styleObjs[i].textContent :
+        //  filterCSS(styleObjs[i].textContent, options.css)
+        style.textContent = styleObjs[i].textContent
+        this.root.appendChild(style)
+      }
 
       // load placeholder
-      if (!search.dataset.placeholder) {
-        search.dataset.placeholder = search.placeholder
+      const placeholder = manualObj.querySelector(
+        ':scope > placeholder')?.textContent?.trim()
+      if (placeholder) {
+        this.#search.placeholder = placeholder
       }
-      search.placeholder = manual.placeholder || search.dataset.placeholder
-
 
       /** categories **/
       const categories = this.#categories
 
-      // load style
-      const styleColor = document.createElement('style')
-      if (manual.style) {
-        //styleColor.textContent =
-        //  trusted ? manual.style : filterCSS(manual.style, options.xss?.css)
-        styleColor.textContent = manual.style
-      }
-      this.root.appendChild(styleColor)
-
       // load categories
-      for (const categoryName in manual.categories) {
-        if (!isCssName(categoryName)) {
-          console.warn(`Invalid category name: ${categoryName}`)
+      const categoryObjs = manualObj.querySelectorAll(':scope > category')
+      for (let i = 0; i < categoryObjs.length; i++) {
+        const categoryObj = categoryObjs[i]
+
+        const categoryName = categoryObj.querySelector(
+          ':scope > name')?.textContent?.trim()
+        if (!categoryName) {
+          console.warn('Category has no name')
+          continue
+        }
+        const categoryTrimmedName = makeName(categoryName)
+        if (categoryTrimmedName === '') {
+          console.warn('Category name invalid')
           continue
         }
 
         const category = document.createElement('section')
-        category.dataset.category = categoryName
+        category.dataset.category = categoryTrimmedName
 
         const categoryHeading = document.createElement('h1')
-        categoryHeading.textContent = property2title(categoryName)
+        categoryHeading.textContent = categoryName
         category.appendChild(categoryHeading)
 
-        const colored = categoryName === manual.colored
+        const colored =
+          categoryObj.querySelector(':scope > category-colored') !== null
         const inputType =
-          manual.radios?.includes(categoryName) ? 'radio' : 'checkbox'
+          categoryObj.querySelector(':scope > category-disjoint') !== null ?
+            'radio' : 'checkbox'
 
-        const categoryTag = document.createElement('div')
-        categoryTag.className = 'manual-category'
+        const tags = document.createElement('div')
+        tags.className = 'manual-category'
         if (colored) {
-          categoryTag.className += ' manual-category-colored'
+          tags.className += ' manual-category-colored'
         }
-        categoryTag.className += ' ' + categoryName
-        for (const [tagName, tagDesc, tagColor] of
-              manual.categories[categoryName]) {
+
+        const tagObjs = categoryObj.querySelectorAll(':scope > tag-definition')
+        for (let j = 0; j < tagObjs.length; j++) {
+          const tagObj = tagObjs[j]
+
+          const tagName = tagObj.querySelector(
+            ':scope > name')?.textContent?.trim()
           if (!isCssName(tagName)) {
             console.warn(
               `Invalid tag name in category ${categoryName}: ${tagName}`)
             continue
           }
 
-          categoryTag.insertAdjacentHTML(
-            'beforeend', `<label class="${tagName}">
-  <input type="${inputType}" name="${categoryName}" value="${tagName}">
-  ${trusted ? tagDesc : xss.process(tagDesc)}
-</label>`)
+          const tag = document.createElement('label')
+          tag.className = tagName
+          tag.textContent = tagObj.querySelector(
+            ':scope > description')?.textContent?.trim() || ''
+
+          const input = document.createElement('input')
+          input.type = inputType
+          input.name = categoryTrimmedName
+          input.value = tagName
+          tag.prepend(input)
+
+          tags.appendChild(tag)
 
           if (colored) {
-            const tagColorValid =
-              !tagColor || trusted || !tagColor?.includes(';')
-            if (!tagColorValid) {
+            const tagColor = tagObj.querySelector(
+              ':scope > color')?.textContent?.trim()
+            if (tagColor?.includes(';')) {
               console.warn(
                 `Invalid color in tag ${tagName} of category ${categoryName}: ${
                   tagColor}`)
             }
-            styleColor.sheet.insertRule(
+            const tagColorValid = !!tagColor && !tagColor?.includes(';')
+            styleTags.sheet.insertRule(
               `:host {--tag-${tagName}: ${
-                (tagColorValid && tagColor) || str2color(tagName)};}`, 0)
-            styleColor.sheet.insertRule(
+                tagColorValid ? tagColor : str2color(tagName)};}`, 0)
+            styleTags.sheet.insertRule(
               `.${tagName} {border-color: var(--tag-${tagName});}`,
               0)
           }
         }
-        category.appendChild(categoryTag)
+
+        category.appendChild(tags)
 
         categories.appendChild(category)
       }
 
       // load links
-      if (manual.links) {
+      const linkObjs = manualObj.querySelectorAll(':scope > link')
+      if (linkObjs.length > 0) {
         const links = document.createElement('menu')
         links.className = 'manual-links'
-        for (const [url, title] of manual.links) {
-          const html = `<li><a target="_blank" href="${url}">${title}</a></li>`
-          links.insertAdjacentHTML(
-            'beforeend', trusted ? html : xss.process(html))
+        for (let i = 0; i < linkObjs.length; i++) {
+          const linkObj = linkObjs[i]
+          const url = linkObj.querySelector(
+            ':scope > url')?.textContent?.trim()
+          if (!url) {
+            continue
+          }
+          const title = linkObj.querySelector(
+            ':scope > title')?.textContent?.trim()
+          if (!title || !title.startsWith('http')) {
+            continue
+          }
+
+          const link = document.createElement('li')
+          const a = document.createElement('a')
+          a.target = '_blank'
+          a.href = url
+          a.textContent = title
+          link.appendChild(a)
+          links.appendChild(link)
         }
         categories.appendChild(links)
       }
 
-
-      /** body **/
-      const body = this.#body
-      body.textContent = ''
-
-      // load formatter
-      /** @type {Set<string>} */
-      const stylesheets = new Set
-      /** @type {{[name: string]: (content: string, page: ManualPage) => string}} */
-      const formatters = {}
-      for (const name in manual.formatters) {
-        const expr = manual.formatters[name]
-        if (expr.startsWith('ManualFormatter.')) {
-          const [_, ns, func] = expr.split('.')
-          if (ns in ManualFormatter && func in ManualFormatter[ns]) {
-            formatters[name] = ManualFormatter[ns][func]
-            if (ManualFormatter[ns].stylesheet) {
-              stylesheets.add(ManualFormatter[ns].stylesheet)
-            }
-          }
-        } else if (trusted) {
-          formatters[name] = Function(
-            'ManualFormatter', "'use strict'; return " + expr)(ManualFormatter)
-        }
-      }
-      const defaultFormatter = formatters._default
-      const postFormatter = formatters._post
-
-      // load custom styles
-      stylesheets.forEach(stylesheet => {
-        const link = document.createElement('link')
-        link.rel = 'stylesheet'
-        link.href = stylesheet
-        this.root.appendChild(link)
-      })
-
       // load body
-      for (let i = 0; i < manual.body.length; i++) {
-        const pageObj = manual.body[i]
-
-        const page = document.createElement('details')
-        if (pageObj._tags && pageObj._tags.length > 0) {
-          page.className = pageObj._tags.join(' ')
-        }
-        page.id = pageObj._id || (
-          pageObj._signature ? pageObj._signature.replace(/[,= ]/g, '') : ''
-        ) || i.toString()
-        page.dataset.search = [
-          pageObj._signature, pageObj._title, pageObj._keywords
-        ].filter(x => x).join(' ').toLowerCase()
-
-        const title = document.createElement('summary')
-        title.innerHTML = trusted ?
-          pageObj._title : xss.process(pageObj._title)
-        if (pageObj._signature) {
-          const signature = document.createElement('code')
-          signature.className = 'manual-page-signature'
-          signature.textContent = pageObj._signature
-          title.appendChild(signature)
-        }
-        page.appendChild(title)
-
-        const article = document.createElement('article')
-        article.className = 'manual-page-content'
-        for (const sectionName in pageObj) {
-          if (sectionName[0] === '_' ||
-              options.ignoredTopics?.includes(sectionName)) {
-            continue
-          }
-          if (!isCssName(sectionName)) {
-            console.warn(
-              `Invalid topic name in page ${
-                pageObj._signature || pageObj._title}: ${sectionName}`)
-            continue
-          }
-
-          const section = document.createElement('section')
-
-          const heading = document.createElement('h1')
-          heading.textContent = property2title(sectionName) + ':'
-          section.appendChild(heading)
-
-          const content = document.createElement('div')
-          content.className = sectionName
-
-          const contentObj = pageObj[sectionName]
-          const formatted =
-            formatters[sectionName] ?
-              formatters[sectionName](contentObj, pageObj) :
-            defaultFormatter ? defaultFormatter(contentObj, pageObj) :
-            contentObj
-          const postFormatted =
-            postFormatter ? postFormatter(formatted, pageObj) : formatted
-          content.innerHTML =
-            trusted ? postFormatted : xss.process(postFormatted)
-
-          section.appendChild(content)
-
-          article.appendChild(section)
-
-          page.appendChild(article)
-        }
-
-        body.appendChild(page)
+      if (typeof manualXsl === 'undefined') {
+        await require(['manual-xsl'])
+      }
+      const xsltProcessor = new XSLTProcessor
+      xsltProcessor.importStylesheet(manualXsl)
+      const result = xsltProcessor.transformToFragment(
+        manualObj, document.implementation.createDocument('', ''))
+      if (result === null) {
+        throw new Error('Invalid XSL data')
       }
 
+      if (options.trusted !== true) {
+        for (let i = 0; i < result.children.length; i++) {
+          if (options.trusted) {
+            options.trusted(result.children[i])
+          } else {
+            filterNode(result.children[i], this.constructor.whitelist)
+          }
+        }
+      }
+      this.#body.appendChild(result)
 
       /** Hash **/
-
       if (location.hash.length > 1) {
         this.setParams()
       }
     }
 
     /**
-     * @param {Promise<Manual | string>} loader
+     * @param {Promise<Element | string>} loader
      * @param {ManualViewRenderOptions} options
-     * @returns {Manual}
+     * @returns {Element}
      */
     async load (loader, options = undefined) {
       this.clear()
@@ -1024,24 +906,35 @@
       /** @type {HTMLElement} */
       const body = this.root.querySelector('.manual-body')
       body.textContent = 'Loading...'
-      /** @type {Manual} */
-      let manual
+
       try {
-        manual = await loader
-        if (typeof manual === 'string') {
-          manual = JSON.parse(manual)
+        const raw = await loader
+
+        let manual
+        if (typeof raw === 'string') {
+          manual = new DOMParser().parseFromString(
+            raw.trim(), 'text/xml').firstElementChild
+          if (manual === null) {
+            throw new Error('empty manual')
+          }
+          const error = manual.querySelector('parsererror')
+          if (error) {
+            throw new Error(error.textContent)
+          }
+        } else if (!(raw instanceof Element)) {
+          throw new Error('invalid manual type')
+        } else {
+          manual = raw
         }
-        if (typeof manual !== 'object' || !manual.body) {
-          throw new Error('Object does not look like a valid manual')
-        }
+
+        this.#body.textContent = ''
+        await this.render(manual, options)
+
+        return manual
       } catch (error) {
         body.textContent = 'Error: ' + error
         throw error
       }
-
-      this.render(manual, options)
-
-      return manual
     }
   }
 
@@ -1073,7 +966,6 @@
       const params = new URLSearchParams(location.hash.slice(1))
       switch (event.detail.type) {
         case 'search':
-          params.delete('expand')
           if (event.detail.value) {
             params.set('search', event.detail.value)
           } else {
@@ -1081,7 +973,6 @@
           }
           break
         case 'category':
-          params.delete('expand')
           if (event.detail.exclusive) {
             if (event.detail.status) {
               params.set(event.detail.name, event.detail.value)

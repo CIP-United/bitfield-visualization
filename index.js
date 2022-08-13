@@ -32,7 +32,23 @@
 
     const manual = document.querySelector('manual-viewer')
     manual.addEventListener('choose', event => {
-      bitfield.format = event.detail.map(x => x[1] + ':' + x[0]).join('\n')
+      /** @type {string[]} */
+      const fields = []
+      /** @type {NodeListOf<Element>} */
+      const fieldObjs = event.detail.children
+      for (let i = 0; i < fieldObjs.length; i++) {
+        const fieldObj = fieldObjs[i]
+        if (fieldObj.localName !== 'field-definition') {
+          continue
+        }
+        fields.push(
+          (fieldObj.querySelector(':scope > name')?.textContent?.trim() ||
+           '') + ':' +
+          (fieldObj.querySelector(':scope > width')?.textContent?.trim() ||
+           ''))
+      }
+      bitfield.format = fields.join('\n')
+      bitfield.viewer.scrollIntoView()
     })
   }
 
