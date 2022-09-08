@@ -255,9 +255,16 @@
 
 <nav class="manual-side-panel">
   <div class="manual-categories"></div>
-  <form class="manual-form">
-    <label>Manual: <input type="file" name="file" /></label>
-    <label>
+  <form class="manual-form manual-form-standalone">
+    <label class="manual-form-on-preload">
+      Manual: <select name="preload"></select>
+    </label>
+    <label class="manual-form-on-standalone">
+      <span class="manual-form-off-preload">Manual:</span>
+      <span class="manual-form-on-preload">Or load a file:</span>
+      <input type="file" name="file" />
+    </label>
+    <label class="manual-form-on-ace">
       <input type="checkbox" name="trust" value="1" />
       Trust the file (Arbitrary code execution!!!)
     </label>
@@ -367,6 +374,8 @@
     }
 
     root = this.attachShadow({mode: 'open'})
+    /** @type {[string, string][]?} */
+    #preload
 
     constructor () {
       super()
@@ -374,20 +383,51 @@
       this.root.appendChild(this.constructor.template.content.cloneNode(true))
 
       const form = this.#form
-      form.addEventListener('change', async event => {
+      form.addEventListener('change', event => {
         /** @type {HTMLFormElement} */
         const form = event.target.form
+        /** @type {HTMLSelectElement} */
+        const select = form.elements['preload']
+        /** @type {HTMLInputElement} */
+        const file = form.elements['file']
 
-        const reader = await readInputFile(form.elements['file'])
-        if (!reader) {
+        switch (event.target) {
+          case select:
+            file.value = ''
+            break
+          case file:
+            select.value = ''
+            break
+        }
+
+        let loader
+        if (select.value) {
+          const entry = this.#preload[Number(select.value)]
+          if (!entry) {
+            return
+          }
+          const resource = entry[1]
+          if (!resource) {
+            return
+          }
+          loader = resource[0] === '<' ? resource :
+            fetch(resource).then(response => response.text())
+        } else if (file.value) {
+          const reader = readInputFile(form.elements['file'])
+          if (!reader) {
+            return
+          }
+          loader = reader.then(reader => reader.result)
+        } else {
           return
         }
+
         //项目经理要求这里运行缓慢，好让客户给钱优化，并得到速度明显提升
         //await sleep(Math.random() * 1000 + 1000)
 
-        /** @type {HTMLElement} */
-        this.load(reader.result, {
-          trusted: form.elements['trust']?.checked || undefined})
+        this.load(loader, {
+          trusted: form.elements['trust']?.checked || undefined,
+        })
       }, {passive: true})
 
       /** @type {HTMLInputElement} */
@@ -585,6 +625,40 @@
       return this.root.querySelector('.manual-body')
     }
 
+    get preload () {
+      return this.#preload
+    }
+
+    set preload (value) {
+      this.#preload = value && value.length > 0 ? value : null
+
+      const form = this.#form
+      form.classList.toggle('manual-form-preload', !!this.#preload)
+
+      /** @type {HTMLSelectElement} */
+      const select = form.elements['preload']
+      select.textContent = ''
+      if (this.#preload) {
+        const option = document.createElement('option')
+        option.textContent = 'Select one...'
+        select.appendChild(option)
+        for (let i = 0; i < this.#preload.length; i++) {
+          const option = document.createElement('option')
+          option.innerHTML = this.#preload[i][0]
+          option.value = i
+          select.appendChild(option)
+        }
+      }
+    }
+
+    get standalone () {
+      return this.#form.classList.contains('manual-form-standalone')
+    }
+
+    set standalone (value) {
+      this.#form.classList.toggle('manual-form-standalone', value)
+    }
+
     /** @type {NodeListOf<HTMLDialogElement>} */
     get pages () {
       return this.#body.children
@@ -652,14 +726,16 @@
       let tagChanged = false
       const categories = this.#categories
       for (let i = 0; i < categories.children.length; i++) {
+        /** @type {HTMLElement} */
         const category = categories.children[i]
-        if (category.classList.contains('links')) {
+        if (!category.dataset.category) {
           continue
         }
         // sync tag checkbox
-        const selected = params.get(category.dataset.category)?.split(',') || []
+        const selectedSet = new Set(
+          params.get(category.dataset.category)?.split(','))
         for (const input of category.querySelectorAll('input')) {
-          const checked = selected.includes(input.value)
+          const checked = selectedSet.has(input.value)
           if (input.checked !== checked) {
             tagChanged = true
             input.checked = checked
@@ -896,15 +972,15 @@
     }
 
     /**
-     * @param {Promise<Element | string>} loader
+     * @param {Element | string | PromiseLike<Element | string>} loader
      * @param {ManualViewRenderOptions} options
-     * @returns {Element}
+     * @returns {Promise<Element>}
      */
     async load (loader, options = undefined) {
       this.clear()
 
       /** @type {HTMLElement} */
-      const body = this.root.querySelector('.manual-body')
+      const body = this.#body
       body.textContent = 'Loading...'
 
       try {
@@ -927,7 +1003,7 @@
           manual = raw
         }
 
-        this.#body.textContent = ''
+        body.textContent = ''
         await this.render(manual, options)
 
         return manual

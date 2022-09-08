@@ -1325,8 +1325,8 @@
     static {
       this.template.innerHTML = `<link rel="stylesheet" href="bitfield.css" />
 
-      <div class="bitfield-table-container">
-      <table is="bitfield-table" class="bitfield-table"></table></div>
+<div class="bitfield-table-container">
+<table is="bitfield-table" class="bitfield-table"></table></div>
 
 <div class="bitfield-values">
   <div>
@@ -1506,7 +1506,7 @@
       const table = this.#table
       if (initiator !== table) {
         table.value = val
-      }unsigned
+      }
 
       const strValue = valueToString(val, this.#radix)
 

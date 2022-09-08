@@ -15,7 +15,7 @@
     ],
     [
       "IEEE754 double-precision",
-      "enum Exponent {\n  EXPONENT_SUBNORMAL\n  EXPONENT_SPECIAL = 0xff\n}\n\nsign:1:lightblue\nexponent:11:lightgreen:Exponent\nfraction:52:lightpink"
+      "enum Exponent {\n  EXPONENT_SUBNORMAL\n  EXPONENT_SPECIAL = 0x7ff\n}\n\nsign:1:lightblue\nexponent:11:lightgreen:Exponent\nfraction:52:lightpink"
     ],
   ]
 
@@ -31,6 +31,9 @@
     const bitfield = new Bitfield(document.body)
 
     const manual = document.querySelector('manual-viewer')
+    require(['manual-preload']).then(([manualPreload]) => {
+      manual.preload = manualPreload
+    })
     manual.addEventListener('choose', event => {
       /** @type {string[]} */
       const fields = []

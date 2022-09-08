@@ -58,7 +58,7 @@
   text-align: right;
 }
 
-.bitfield-values {
+.bitfield-values:not([hidden]) {
   margin-block-start: 1em;
   display: flex;
   flex-wrap: wrap;
@@ -76,7 +76,7 @@
   flex-basis: calc(50% - 1em);
 }
 
-.tooltip {
+.tooltip:not([hidden]) {
   position: relative;
   display: inline-block;
   border-bottom: 1px dotted black;
