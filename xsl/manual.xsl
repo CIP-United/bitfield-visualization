@@ -52,6 +52,10 @@
       </xsl:if>
       <xsl:attribute name="data-search">
         <xsl:value-of select="translate(m:signature, $uppercase, $lowercase)" />
+        <xsl:if test="@id">
+          <xsl:text> </xsl:text>
+          <xsl:value-of select="translate(@id, $uppercase, $lowercase)" />
+        </xsl:if>
         <xsl:if test="m:title">
           <xsl:text> </xsl:text>
           <xsl:value-of select="translate(m:title, $uppercase, $lowercase)" />
