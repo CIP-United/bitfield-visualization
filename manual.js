@@ -246,6 +246,207 @@
 
 
   class ManualViewer extends HTMLElement {
+    static xsl = new DOMParser().parseFromString(`<?xml version="1.0" encoding="UTF-8"?>
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+    xmlns:m="https://github.com/CIP-United/bitfield-visualization"
+    exclude-result-prefixes="m">
+  <xsl:output method="html" indent="yes" />
+
+  <xsl:variable name="lowercase" select="'abcdefghijklmnopqrstuvwxyz'" />
+  <xsl:variable name="uppercase" select="'ABCDEFGHIJKLMNOPQRSTUVWXYZ'" />
+
+  <xsl:template name="m:binary">
+    <xsl:param name="value" />
+    <xsl:param name="width" select="1" />
+
+    <xsl:if test="$value &gt; 0 or $width &gt; 0">
+      <xsl:call-template name="m:binary">
+        <xsl:with-param name="value" select="floor($value div 2)" />
+        <xsl:with-param name="width" select="$width - 1" />
+      </xsl:call-template>
+      <xsl:value-of select="$value mod 2" />
+    </xsl:if>
+  </xsl:template>
+
+  <xsl:template match="m:manual">
+    <xsl:apply-templates select="m:page" />
+  </xsl:template>
+
+  <xsl:template match="m:page">
+    <details>
+      <xsl:apply-templates select="@*" />
+      <xsl:if test="not(@id)">
+        <xsl:attribute name="id">
+          <xsl:choose>
+            <xsl:when test="m:signature">
+              <xsl:value-of select="translate(m:signature, ',= ', '')" />
+            </xsl:when>
+            <xsl:otherwise>
+              <xsl:value-of select="count(preceding-sibling::m:page)" />
+            </xsl:otherwise>
+          </xsl:choose>
+        </xsl:attribute>
+      </xsl:if>
+      <xsl:if test="m:tag">
+        <xsl:attribute name="class">
+          <xsl:value-of select="@class" />
+          <xsl:for-each select="m:tag">
+            <xsl:text> </xsl:text>
+            <xsl:value-of select="node()" />
+          </xsl:for-each>
+        </xsl:attribute>
+      </xsl:if>
+      <xsl:attribute name="data-search">
+        <xsl:value-of select="translate(m:signature, $uppercase, $lowercase)" />
+        <xsl:if test="@id">
+          <xsl:text> </xsl:text>
+          <xsl:value-of select="translate(@id, $uppercase, $lowercase)" />
+        </xsl:if>
+        <xsl:if test="m:title">
+          <xsl:text> </xsl:text>
+          <xsl:value-of select="translate(m:title, $uppercase, $lowercase)" />
+        </xsl:if>
+        <xsl:if test="m:keywords">
+          <xsl:text> </xsl:text>
+          <xsl:value-of select="translate(m:keywords, $uppercase, $lowercase)" />
+        </xsl:if>
+      </xsl:attribute>
+
+      <summary>
+        <xsl:apply-templates select="m:title/@* | m:title/node()" />
+        <xsl:if test="m:signature">
+          <code class="manual-page-signature">
+            <xsl:apply-templates select="m:signature/@* | m:signature/node()" />
+          </code>
+        </xsl:if>
+      </summary>
+
+      <article class="manual-page-content">
+        <xsl:apply-templates select="m:content/@* | m:content/node()" />
+      </article>
+    </details>
+  </xsl:template>
+
+  <xsl:template match="m:section">
+    <section>
+      <xsl:apply-templates select="@* | node()" />
+    </section>
+  </xsl:template>
+
+  <xsl:template match="m:section/m:heading">
+    <h1>
+      <xsl:apply-templates select="@* | node()" />
+    </h1>
+  </xsl:template>
+
+  <xsl:template match="m:paragraph">
+    <div class="paragraph">
+      <xsl:apply-templates />
+    </div>
+  </xsl:template>
+
+  <xsl:template match="m:struct-definition">
+    <xsl:variable name="struct-length" select="sum(m:field-definition/m:width)" />
+
+    <div class="scattered paragraph">
+      <table class="struct no-default-style table-nonempty">
+        <xsl:apply-templates select="@*" />
+
+        <xsl:apply-templates select="caption" />
+        <thead>
+          <tr>
+            <xsl:for-each select="m:field-definition">
+              <xsl:variable name="field-index" select="sum(following-sibling::m:field-definition/m:width)" />
+
+              <th>
+                <xsl:apply-templates select="m:width/@*" />
+
+                <xsl:choose>
+                  <xsl:when test="m:width &lt;= 0">
+                    <xsl:message terminate="yes">
+                      Error: field width cannot be non-positive
+                    </xsl:message>
+                  </xsl:when>
+                  <xsl:when test="m:width = 1">
+                    <xsl:value-of select="$field-index" />
+                  </xsl:when>
+                  <xsl:otherwise>
+                    <div class="scattered">
+                      <div><xsl:value-of select="$field-index + m:width - 1" /></div>
+                      <div><xsl:value-of select="$field-index" /></div>
+                    </div>
+                  </xsl:otherwise>
+                </xsl:choose>
+              </th>
+            </xsl:for-each>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="struct-names">
+            <xsl:for-each select="m:field-definition">
+              <td>
+                <xsl:apply-templates select="m:name/@*" />
+                <xsl:attribute name="style">
+                  <xsl:value-of select="m:name/@style" />
+                  <xsl:text>width: </xsl:text>
+                  <xsl:value-of select="m:width div $struct-length * 100" />
+                  <xsl:text>%;</xsl:text>
+                </xsl:attribute>
+
+                <xsl:apply-templates select="m:name/node()" />
+              </td>
+            </xsl:for-each>
+          </tr>
+          <tr class="struct-bits">
+            <xsl:for-each select="m:field-definition">
+              <td>
+                <xsl:apply-templates select="m:value/@*" />
+                <xsl:attribute name="data-width">
+                  <xsl:value-of select="m:width" />
+                </xsl:attribute>
+
+                <xsl:choose>
+                  <xsl:when test="m:value &gt;= 0">
+                    <xsl:call-template name="m:binary">
+                      <xsl:with-param name="value" select="m:value" />
+                      <xsl:with-param name="width" select="m:width" />
+                    </xsl:call-template>
+                  </xsl:when>
+                  <xsl:otherwise>
+                    <xsl:apply-templates select="m:value/node()" />
+                  </xsl:otherwise>
+                </xsl:choose>
+              </td>
+            </xsl:for-each>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr>
+            <xsl:for-each select="m:field-definition">
+              <th>
+                <xsl:apply-templates select="m:width/@* | m:width/node()" />
+              </th>
+            </xsl:for-each>
+          </tr>
+        </tfoot>
+      </table>
+      <button type="button">
+        <xsl:attribute name="data-struct">
+          <xsl:text>./m:page[</xsl:text>
+          <xsl:value-of select="count(ancestor::m:page/preceding-sibling::m:page) + 1" />
+          <xsl:text>]//m:struct-definition</xsl:text>
+        </xsl:attribute>
+        <xsl:text>Use</xsl:text>
+      </button>
+    </div>
+  </xsl:template>
+
+  <xsl:template match="/ | @* | node()">
+    <xsl:copy>
+      <xsl:apply-templates select="@* | node()" />
+    </xsl:copy>
+  </xsl:template>
+</xsl:stylesheet>`, 'text/xml')
     static template = document.createElement('template')
 
     static {
@@ -374,8 +575,16 @@
     }
 
     root = this.attachShadow({mode: 'open'})
-    /** @type {[string, string][]?} */
-    #preload
+    /**
+     * list of preloaded data files / URLs
+     * @type {[string, string][]}
+     */
+    #preload = []
+    /**
+     * the manual in use
+     * @type {Element?}
+     */
+    #manual = null
 
     constructor () {
       super()
@@ -553,9 +762,20 @@
         if (target === null || !target.dataset.struct) {
           return
         }
+        if (this.#manual === null) {
+          throw new Error('struct was asked, but no manual data available')
+        }
+
+        const xpEvaluator = new XPathEvaluator()
+        const struct = xpEvaluator.evaluate(
+          target.dataset.struct, this.#manual,
+          xpEvaluator.createNSResolver(this.#manual.ownerDocument),
+          XPathResult.FIRST_ORDERED_NODE_TYPE).singleNodeValue
+        if (struct === null) {
+          throw new Error('XPath found nothing')
+        }
         this.dispatchEvent(new CustomEvent('choose', {
-          detail: new DOMParser().parseFromString(
-            target.dataset.struct.trim(), 'text/xml').firstElementChild
+          detail: struct,
         }))
       }, {passive: true})
 
@@ -625,20 +845,54 @@
       return this.root.querySelector('.manual-body')
     }
 
+    /**
+     * if true, show control sidebar
+     */
+    get standalone () {
+      return this.#form.classList.contains('manual-form-standalone')
+    }
+
+    set standalone (value) {
+      this.#form.classList.toggle('manual-form-standalone', value)
+    }
+
+    /**
+     * page entries
+     * @type {NodeListOf<HTMLDialogElement>}
+     */
+    get pages () {
+      return this.#body.children
+    }
+
+    /**
+     * search text
+     */
+    get search () {
+      return this.#search.value
+    }
+
+    set search (value) {
+      this.#search.value = value
+      this.#doSearch()
+    }
+
+    /**
+     * list of preloaded data files / URLs
+     */
     get preload () {
       return this.#preload
     }
 
     set preload (value) {
-      this.#preload = value && value.length > 0 ? value : null
+      this.#preload = value
 
       const form = this.#form
-      form.classList.toggle('manual-form-preload', !!this.#preload)
+      form.classList.toggle('manual-form-preload', this.#preload.length > 0)
 
       /** @type {HTMLSelectElement} */
       const select = form.elements['preload']
       select.textContent = ''
-      if (this.#preload) {
+      if (this.#preload.length > 0) {
         const option = document.createElement('option')
         option.textContent = 'Select one...'
         select.appendChild(option)
@@ -651,26 +905,11 @@
       }
     }
 
-    get standalone () {
-      return this.#form.classList.contains('manual-form-standalone')
-    }
-
-    set standalone (value) {
-      this.#form.classList.toggle('manual-form-standalone', value)
-    }
-
-    /** @type {NodeListOf<HTMLDialogElement>} */
-    get pages () {
-      return this.#body.children
-    }
-
-    get search () {
-      return this.#search.value
-    }
-
-    set search (value) {
-      this.#search.value = value
-      this.#doSearch()
+    /**
+     * the manual in use
+     */
+    get manual () {
+      return this.#manual
     }
 
     collapseAll () {
@@ -777,6 +1016,8 @@
              this.root.lastElementChild.tagName === 'LINK') {
         this.root.lastElementChild.remove()
       }
+
+      this.#manual = null
     }
 
     /**
@@ -789,9 +1030,10 @@
      * @param {ManualViewRenderOptions} options
      * @param {string[]?} ignoredTopics
      */
-    async render (manual, options = {}) {
+    render (manual, options = {}) {
       let manualObj = manual
 
+      // apply custom xsls
       const xsls = manualObj.querySelectorAll(':scope > stylesheet')
       for (let i = 0; i < xsls.length; i++) {
         const xsltProcessor = new XSLTProcessor
@@ -804,6 +1046,15 @@
         if (manualObj === null) {
           throw new Error('Invalid embedded XSL')
         }
+      }
+
+      // apply final xsl
+      const xsltProcessor = new XSLTProcessor
+      xsltProcessor.importStylesheet(this.constructor.xsl)
+      const bodyObj = xsltProcessor.transformToFragment(
+        manualObj, document.implementation.createDocument('', ''))
+      if (bodyObj === null) {
+        throw new Error('Invalid XSL data')
       }
 
       // load styles
@@ -943,32 +1194,23 @@
       }
 
       // load body
-      if (typeof manualXsl === 'undefined') {
-        await require(['manual-xsl'])
-      }
-      const xsltProcessor = new XSLTProcessor
-      xsltProcessor.importStylesheet(manualXsl)
-      const result = xsltProcessor.transformToFragment(
-        manualObj, document.implementation.createDocument('', ''))
-      if (result === null) {
-        throw new Error('Invalid XSL data')
-      }
-
       if (options.trusted !== true) {
-        for (let i = 0; i < result.children.length; i++) {
+        for (let i = 0; i < bodyObj.children.length; i++) {
           if (options.trusted) {
-            options.trusted(result.children[i])
+            options.trusted(bodyObj.children[i])
           } else {
-            filterNode(result.children[i], this.constructor.whitelist)
+            filterNode(bodyObj.children[i], this.constructor.whitelist)
           }
         }
       }
-      this.#body.appendChild(result)
+      this.#body.appendChild(bodyObj)
 
       /** Hash **/
       if (location.hash.length > 1) {
         this.setParams()
       }
+
+      this.#manual = manualObj
     }
 
     /**
@@ -1004,7 +1246,7 @@
         }
 
         body.textContent = ''
-        await this.render(manual, options)
+        this.render(manual, options)
 
         return manual
       } catch (error) {

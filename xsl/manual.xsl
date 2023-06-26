@@ -2,8 +2,6 @@
 <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
     xmlns:m="https://github.com/CIP-United/bitfield-visualization"
     exclude-result-prefixes="m">
-  <xsl:import href="xml-to-string.xsl" />
-
   <xsl:output method="html" indent="yes" />
 
   <xsl:variable name="lowercase" select="'abcdefghijklmnopqrstuvwxyz'" />
@@ -186,7 +184,9 @@
       </table>
       <button type="button">
         <xsl:attribute name="data-struct">
-          <xsl:apply-templates select="." mode="xml-to-string" />
+          <xsl:text>./m:page[</xsl:text>
+          <xsl:value-of select="count(ancestor::m:page/preceding-sibling::m:page) + 1" />
+          <xsl:text>]</xsl:text>
         </xsl:attribute>
         <xsl:text>Use</xsl:text>
       </button>
